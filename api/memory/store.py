@@ -55,9 +55,18 @@ class PgMemoryStore:
         self._pool = pool
 
     async def ensure_session(self, session_id: str | None, user_id: str) -> str:
-        """Reuse the session if this user owns it; otherwise start a new one."""
+        """Use the caller's session id (created if new) unless another user owns it.
+
+        Clients may pick their own ids (the eval harness does); an id owned by someone else gets
+        a fresh uuid instead, so one user can never read another's turns.
+        """
         async with self._pool.connection() as conn:
             if session_id:
+                cur = await conn.execute(
+                    "insert into sessions (session_id, user_id, created_at) values (%s, %s, now())"
+                    " on conflict (session_id) do nothing",
+                    (session_id, user_id),
+                )
                 cur = await conn.execute(
                     "select user_id from sessions where session_id = %s", (session_id,)
                 )
@@ -124,7 +133,7 @@ class InMemoryStore:
     recents: dict[tuple[str, str], datetime] = field(default_factory=dict)
 
     async def ensure_session(self, session_id: str | None, user_id: str) -> str:
-        if session_id and self.sessions.get(session_id) == user_id:
+        if session_id and self.sessions.setdefault(session_id, user_id) == user_id:
             return session_id
         new_id = str(uuid.uuid4())
         self.sessions[new_id] = user_id

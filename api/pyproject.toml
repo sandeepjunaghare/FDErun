@@ -10,6 +10,8 @@ dependencies = [
     "pgvector>=0.3",
     "pydantic-settings>=2.6",
     "anthropic>=1.11",
+    "voyageai>=0.5.0",
+    "pyyaml>=6.0.3",
 ]
 
 [dependency-groups]
@@ -40,7 +42,7 @@ src = ["."]
 select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agents", "config", "db", "guardrails", "main", "memory", "schemas"]
+known-first-party = ["agents", "config", "db", "guardrails", "main", "memory", "rag", "schemas"]
 
 [tool.pyright]
 pythonVersion = "3.12"

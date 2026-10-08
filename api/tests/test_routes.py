@@ -95,3 +95,18 @@ def test_recent_lists_conditions_newest_first(client_with):
 
 def test_recent_requires_user_id(client_with):
     assert client_with(FakeLLM()).get("/recent").status_code == 422
+
+
+def test_embedding_failure_is_a_503(client_with, monkeypatch):
+    import agents.deps
+    from rag.embed import EmbeddingError
+
+    async def broken_search(*_args, **_kw):
+        raise EmbeddingError("VOYAGE_API_KEY not set")
+
+    monkeypatch.setattr(agents.deps, "search", broken_search)
+    client = client_with(FakeLLM(BRIEFING))
+    main.app.state.deps.search = agents.deps.search_or_fail
+    r = client.post("/ask", json={"question": "CHF", "user_id": "u"})
+    assert r.status_code == 503
+    assert r.json() == {"detail": "RetrievalError"}

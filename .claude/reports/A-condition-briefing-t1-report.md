@@ -43,3 +43,19 @@ Memory keeps session turns (follow-ups reuse the briefing's chunks) and per-user
 - Swap stubs in `api/agents/deps.py` for `rag.search.search` and `rag.conditions.list_conditions`.
 - Pane B: `0003_memory.sql` per T2 shape (follow-up evidence is stored as `turns` with `role='retrieved'`, JSON content — no extra column needed). PII golden case must be a briefing request with a name, not advice.
 - Pane C: `AskResponse.session_id` (keep it for follow-ups), `/chat` `error` event `{"detail": cls}`, `GET /recent` → `{"user_id", "conditions": [{"condition_id", "name", "viewed_at"}]}`.
+
+## Amendment 2026-10-08 — merge prep with pane B
+- Merged `pane-b` into `pane-a` (no overlapping files). Applied B's needs from A: `uv add voyageai pyyaml`,
+  `"rag"` in isort `known-first-party` (settings were already in `config.py`).
+- `api/schemas/` re-exports `RetrievedChunk`, `Condition`, `Section`, `SECTIONS` from `rag.models`: Pydantic rejects
+  a look-alike class, so `AskResponse(retrieved=<rag chunks>)` would have failed with two definitions.
+- `agents/deps.py`: stubs removed; real `rag.search` (EmbeddingError → `RetrievalError`, a `PipelineError` → 503) and
+  `rag.list_conditions`.
+- Golden set first run 12/14: (1) the harness picks its own session ids and `ensure_session` replaced unknown ids →
+  now creates the session under the client's id unless another user owns it; (2) the planner refused
+  "Brief me on COPD for my patient [REDACTED-NAME]" as clinical advice → prompt now says a patient mention alone is
+  still a briefing. Re-run: **14/14 PASS**, every metric 1.00 (`evals/results/20261008-113405-condition-briefing.json`).
+- Latency with real search: answerable 11–13 s, refusal 3 s (budget 6.5–8 s) — still over; next lever is the
+  answerer (effort/k) and skipping the planner LLM call when the code alias match is unambiguous.
+- Validation: ruff/format/pyright clean · api unit 83 · integration 4 (incl. B's ingest/search) · evals checks + fake
+  harness PASS · local smoke OK.

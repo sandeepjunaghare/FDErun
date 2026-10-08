@@ -208,3 +208,9 @@ def test_llm_error_propagates_as_pipeline_error():
     deps = make_deps(FakeLLM(BRIEFING, (BriefingDraft, LLMError("APIConnectionError"))))
     with pytest.raises(LLMError):
         asyncio.run(ask(req(), deps))
+
+
+def test_client_chosen_session_id_is_kept():
+    deps = make_deps(FakeLLM(BRIEFING, good_draft(), PASS))
+    out = asyncio.run(ask(req(session_id="eval-run1-hf"), deps))
+    assert out.session_id == "eval-run1-hf"

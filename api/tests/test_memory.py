@@ -22,6 +22,9 @@ def test_pg_memory_roundtrip():
             sid = await store.ensure_session(None, user)
             assert await store.ensure_session(sid, user) == sid
             assert await store.ensure_session(sid, f"{user}-other") != sid
+            chosen = f"{user}-chosen"
+            assert await store.ensure_session(chosen, user) == chosen
+            assert await store.ensure_session(chosen, user) == chosen
             chunks = CHUNKS["emerging_treatments"]
             await store.save_briefing(sid, Briefing("heart-failure", chunks))
             got = await store.last_briefing(sid)

@@ -1,18 +1,32 @@
-"""Public request/response shapes; mirrors `evals/contract.py` (a separate uv project) exactly."""
+"""Public request/response shapes; mirrors `evals/contract.py` (a separate uv project) exactly.
 
-from datetime import date
+`RetrievedChunk`, `Condition`, `Section` come from `rag.models` (pane B) so the retriever's output
+and the response use one class each; Pydantic rejects an instance of a look-alike class.
+"""
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from rag.models import SECTIONS, Condition, RetrievedChunk, Section
+
 Action = Literal["answer", "refuse", "redact", "escalate"]
-Section = Literal["standard_of_care", "emerging_treatments", "key_institutions"]
-SECTIONS: tuple[Section, ...] = ("standard_of_care", "emerging_treatments", "key_institutions")
 SECTION_HEADINGS: dict[Section, str] = {
     "standard_of_care": "## Current standard of care",
     "emerging_treatments": "## Emerging treatments",
     "key_institutions": "## Key companies and institutions",
 }
+
+__all__ = [
+    "SECTIONS",
+    "SECTION_HEADINGS",
+    "Action",
+    "AskRequest",
+    "AskResponse",
+    "Condition",
+    "RetrievedChunk",
+    "Section",
+]
 
 
 class AskRequest(BaseModel):
@@ -22,16 +36,6 @@ class AskRequest(BaseModel):
     session_id: str | None = Field(default=None, max_length=200)
 
 
-class RetrievedChunk(BaseModel):
-    chunk_id: str
-    doc: str
-    text: str
-    score: float | None = None
-    section: str | None = None
-    source_label: str | None = None
-    as_of: date | None = None
-
-
 class AskResponse(BaseModel):
     answer: str
     citations: list[str] = Field(default_factory=list)
@@ -39,9 +43,3 @@ class AskResponse(BaseModel):
     retrieved: list[RetrievedChunk] = Field(default_factory=list)
     # Additive: lets the UI keep the session after the first turn.
     session_id: str | None = None
-
-
-class Condition(BaseModel):
-    id: str
-    name: str
-    aliases: list[str] = Field(default_factory=list)

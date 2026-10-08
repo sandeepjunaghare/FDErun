@@ -28,11 +28,11 @@ api/                      # FastAPI service — Render web service; streams resp
     answerer.py           # sonnet: typed BriefingDraft (claims + chunk ids); render.py turns it into markdown
     critic.py             # code checks (citations, section integrity) then haiku faithfulness — review hardest
     pipeline.py           # wires the stages as an event generator; one retry, then refuse
-    deps.py               # app wiring; STUBS rag.search / rag.conditions (reads corpus/) until pane B merges
+    deps.py               # app wiring: ClaudeLLM, rag.search (EmbeddingError → RetrievalError), PgMemoryStore
   schemas/                # Pydantic I/O contracts for every agent — guardrails are enforced here, not in prompts
   guardrails/             # scope classifier, PII redaction, citation check, the one domain rule
   memory/                 # session memory (conversation) + persistent memory (user profile), scoped per user
-  rag/                    # Voyage embedding client (EMBEDDING_MODEL/DIM; input_type document vs query) + ingestion
+  rag/                    # Voyage embeddings (document vs query) + ingest + search (condition + section filter) + conditions
   db/                     # async psycopg pool (Supabase session pooler), check_db(), smoke_roundtrip()
     migrate.py            # applies migrations/*.sql once each, in name order: uv run python -m db.migrate
     migrations/           # numbered SQL files (0001_smoke.sql …) — the only way schema changes
@@ -91,13 +91,13 @@ own worktree via `/pane`, which owns disjoint folders; shared files (`api/main.p
 |---|---|---|
 | Deployment | `render.yaml`, `api/Dockerfile`, `ui/Dockerfile`, `scripts/smoke.sh`, `docs/runbook-deploy.md` | verified: api + ui on Render (`fderun-ui` shows API + DB ✅, 2026-10-07); push → CI → auto-deploy (~35 s) → smoke OK; clean-slate deploy rehearsed in 1:29; local fallback (api + ui) rehearsed: Docker ~50 s cold / 8 s warm, uv ~4 s (`docs/runbook-local.md`) |
 | GitHub | `README.md`, `.github/workflows/ci.yml` | verified: CI green on the last 20 pushes (lint, types, unit tests, evals harness, ui lint + types, gitleaks, Docker build); README has the Handoff section |
-| Vector DB | `api/db/`, `api/db/migrations/`, `api/rag/` (ingest) | connection + smoke table built; documents/chunks table planned; ingest planned (pane B: `python -m rag.ingest <corpus-dir>`, run once from local after migrate; documented in README Run step 4 + `docs/runbook-kickoff.md` step 7) |
+| Vector DB | `api/db/`, `api/db/migrations/`, `api/rag/` (ingest) | verified: conditions/documents/chunks (HNSW cosine) + memory tables migrated; corpus ingested (10 conditions, 30 docs, 131 chunks); search filtered by condition + section, golden hit rate 1.00 (`evals/results/20261008-113405-condition-briefing.json`) |
 | Embedding model | `api/rag/`, `EMBEDDING_*` + `VOYAGE_API_KEY` in `.env` | chosen + verified: voyage-4, 1024 dims → `vector(1024)` (`scripts/check_embeddings.py`); rag/ client planned |
-| Multi-agent orchestration | `api/agents/` | built + unit-tested: planner → retriever → answerer → critic, one retry then refuse; retrieval stubbed until pane B merges |
-| Framework | `api/main.py` (FastAPI) | FastAPI built; Messages API + Voyage → pgvector verified: `/ask` dry run 2026-10-07, evals PASS (`docs/runbook-kickoff.md` → Dry-run lessons); `/ask` + `/chat` (SSE) + `/recent` built and unit-tested |
+| Multi-agent orchestration | `api/agents/` | verified end to end: planner → retriever → answerer → critic, one retry then refuse; golden set 14/14 PASS on local `/ask` (`evals/results/20261008-113405-condition-briefing.json`); answerable ~11–13 s, refusal ~3 s |
+| Framework | `api/main.py` (FastAPI) | FastAPI built; Messages API + Voyage → pgvector verified: `/ask` dry run 2026-10-07, evals PASS (`docs/runbook-kickoff.md` → Dry-run lessons); `/ask` + `/chat` (SSE) + `/recent` built, unit-tested and run live (smoke OK) |
 | Memory | `api/memory/` | built + unit-tested: session turns (follow-ups reuse the briefing's chunks) + recent conditions per user; Postgres store verified against Supabase (`pytest -m integration`) |
 | Guardrails | `api/schemas/`, `api/guardrails/` | built + unit-tested: scope (planner + code), PII redaction on input, citations ⊆ retrieved, section integrity |
-| LLM Eval | `evals/` | verified: harness tested (fake target); real Claude judge (claude-haiku-4-5) passes the example set (`evals/results/20261006-162139-example.json`) and flags an unsupported claim (`pytest -m integration`), Langfuse traces on; per-scenario golden set + `/ask` on the day |
+| LLM Eval | `evals/` | verified: harness tested (fake target); real Claude judge (claude-haiku-4-5) passes the example set (`evals/results/20261006-162139-example.json`) and flags an unsupported claim (`pytest -m integration`), Langfuse traces on; condition-briefing golden set (14 cases, multi-turn sessions) PASS against real `/ask`, every metric 1.00 (`evals/results/20261008-113405-condition-briefing.json`) |
 | Front end | `ui/` | skeleton verified: Streamlit shows API + DB status, runs in Docker, with uv (`docs/runbook-local.md`) and on Render (https://fderun-ui.onrender.com); chat view planned |
 
 ## Ground rules
@@ -124,7 +124,7 @@ own worktree via `/pane`, which owns disjoint folders; shared files (`api/main.p
 - test: `cd api && uv run pytest` (unit, no network) · `uv run pytest -m integration` (real Supabase)
 - run: `cd api && uv run uvicorn main:app --reload --port 8710` · `cd ui && uv run streamlit run app.py` (port 8711) · both in Docker: `docker compose up --build` · fallback steps: `docs/runbook-local.md`
 - migrate: `cd api && uv run python -m db.migrate` (local and Render share one Supabase DB, so run it once from here)
-- ingest (planned, pane B): `cd api && uv run python -m rag.ingest <corpus-dir>` after migrate, from here only; idempotent upsert on stable chunk ids, re-embeds on each run
+- ingest: `cd api && uv run python -m rag.ingest ../corpus/condition-briefing` after migrate, from here only; idempotent upsert on stable chunk ids, re-embeds on each run
 - smoke: `scripts/smoke.sh` (local) · `scripts/smoke.sh https://fderun-api.onrender.com latest --wait` (Render; waits until the live api/ code matches HEAD)
 - copy DATABASE_URL for a dashboard: `scripts/copy-db-url.sh` · full deploy procedure: `docs/runbook-deploy.md`
 - DB check without the API: `uv run --script scripts/check_db.py` · embeddings: `uv run --script scripts/check_embeddings.py`
