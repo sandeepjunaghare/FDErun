@@ -61,7 +61,7 @@ docs/walkthrough-data.md  # stakeholder walkthrough of the synthetic data: sourc
 docs/runbook-kickoff.md   # brief → PRD → architecture → tickets → 4 worktree panes, minute by minute
 docs/templates/           # discovery-raw.md: freeform capture during the call → /discovery sorts it into
                           #   discovery-notes.md (stakeholder questions mapped to PRD sections)
-docs/visual/one-page.html # non-technical one-pager (pane D): edit the `page` object; flags jargon on screen
+docs/visual/presentation_deck.html # non-technical one-pager (pane D): edit the `page` object; flags jargon on screen
 docs/<slug>.prd.md        # (per scenario) the what/why — /plan-create-prd
 docs/architecture.md      # (per scenario) the how — /plan-architecture
 docs/tickets/<slug>.md    # (per scenario) 4 parallel tickets, one per pane — /piv-slice-epic

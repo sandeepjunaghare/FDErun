@@ -294,7 +294,7 @@ After that, every push to `main` that touches `api/` or `ui/` redeploys that ser
 | How the code is laid out, conventions, commands | [`CLAUDE.md`](CLAUDE.md) | For anyone (or any agent) changing code |
 | Deploy, rollback, rotate the database password | [`docs/runbook-deploy.md`](docs/runbook-deploy.md) | Before touching production |
 | Quality bar: golden set + eval harness | `evals/`, `evals/golden/condition-briefing.yaml` | Before changing prompts, retrieval or guardrails |
-| A one-page explanation for strategists | [`docs/visual/one-page.html`](docs/visual/one-page.html) | For stakeholders |
+| A one-page explanation for strategists | [`docs/visual/presentation_deck.html`](docs/visual/presentation_deck.html) | For stakeholders |
 
 ### Who owns what
 
