@@ -1,7 +1,8 @@
 # Walkthrough — the synthetic data (for the stakeholder)
 
 Answers the stakeholder's concern from discovery: "for standard of care and emerging treatments we have to be
-careful about freshness and source credibility." About 3 minutes. Data card: `corpus/condition-briefing/README.md`.
+careful about freshness and source credibility." It also covers one change from the call (keyword search, step 5).
+About 3½ minutes. Data card: `corpus/condition-briefing/README.md`.
 
 ## 1. Say what it is (20 s)
 
@@ -32,7 +33,16 @@ Ask for a heart failure briefing in the UI. For any cited claim, point at the **
 next to it**, and at how the dates differ by section: emerging treatments as of 2026-09, key institutions as of
 2025-12. "Freshness is visible per section, not hidden behind one date for the whole briefing."
 
-## 5. Say what changes with real data (20 s)
+## 5. Say how each section finds its evidence (30 s)
+
+This is a change from what we discussed on the call, so say it plainly:
+
+"Each section runs its own search, limited to this condition and this section's documents, and ranked by meaning
+rather than exact words. On the call we talked about adding keyword search alongside. We've held it back: once the
+search is limited to one condition and one section there are only a handful of passages to choose from, so keyword
+matching adds little. We'll add it if the test set shows sections missing the right passage."
+
+## 6. Say what changes with real data (20 s)
 
 "Moving to real sources means swapping the corpus, not the system: real documents get the same labels, the same
 as-of dates, and the same section check. Release 2 can flag sections whose as-of date is older than a threshold
@@ -46,3 +56,6 @@ you set."
   make it obvious which parts are placeholders.
 - **"How do you stop sections mixing?"** Every document has one section label; each section searches only its own
   documents, and a check rejects any claim that cites a document from another section.
+- **"Didn't we talk about keyword search too?"** We deferred it, not dropped it. Filtering to one condition and one
+  section leaves so few passages that meaning-based ranking finds the right one; the test set measures that on every
+  run, and keyword search goes in if a section misses.
