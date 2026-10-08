@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from client import UiApiError, chat_available, get_recent, parse_sse, stream_chat
+from client import UiApiError, chat_available, get_recent, parse_sse, stream_chat, wake_api
 from models import AskResponse, ChatRequest
 
 SSE_BODY = (
@@ -110,3 +110,49 @@ def test_recent_label_falls_back_to_id():
         client=client_for(lambda r: httpx.Response(200, json=[{"condition_id": "heart-failure"}])),
     )
     assert rows[0].label == "heart failure"
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def sleep(self, s: float) -> None:
+        self.now += s
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_wake_api_retries_render_waking_statuses_until_healthy():
+    answers = iter([502, 503, 504, 200])
+    clock = FakeClock()
+    http = client_for(lambda req: httpx.Response(next(answers)))
+    assert wake_api("http://api", client=http, sleep=clock.sleep, clock=clock)
+    assert clock.now == 6
+
+
+def test_wake_api_retries_transport_errors():
+    calls = iter([httpx.ConnectError("down"), httpx.Response(200)])
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        nxt = next(calls)
+        if isinstance(nxt, Exception):
+            raise nxt
+        return nxt
+
+    clock = FakeClock()
+    assert wake_api("http://api", client=client_for(handler), sleep=clock.sleep, clock=clock)
+
+
+def test_wake_api_gives_up_after_wait():
+    clock = FakeClock()
+    http = client_for(lambda req: httpx.Response(502))
+    assert not wake_api("http://api", wait_s=10, client=http, sleep=clock.sleep, clock=clock)
+    assert clock.now == 10
+
+
+def test_wake_api_stops_on_non_waking_error():
+    clock = FakeClock()
+    http = client_for(lambda req: httpx.Response(500))
+    assert not wake_api("http://api", client=http, sleep=clock.sleep, clock=clock)
+    assert clock.now == 0

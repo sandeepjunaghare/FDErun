@@ -9,7 +9,7 @@ import httpx
 import streamlit as st
 
 from briefing import annotate, build_briefing, format_source, notice_for
-from client import ChatEvent, UiApiError, chat_available, get_recent, stream_chat
+from client import ChatEvent, UiApiError, chat_available, get_recent, stream_chat, wake_api
 from models import AskResponse, ChatRequest
 from stub import stub_chat_events
 
@@ -36,13 +36,24 @@ def get(path: str) -> tuple[bool, str]:
 
 
 @st.cache_data(ttl=30, show_spinner=False)
+def api_awake() -> bool:
+    """Wake the API before anything decides it is down (the hosted API sleeps when idle)."""
+    with st.spinner("Connecting to the briefing service (up to a minute after it has been idle)…"):
+        return wake_api(API_URL)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
 def status_checks() -> dict[str, tuple[bool, str]]:
+    api_awake()
     return {path: get(path) for path in ("/health", "/version", "/health/db")}
 
 
 @st.cache_data(ttl=30, show_spinner=False)
 def use_stub() -> bool:
-    return FORCE_STUB or not chat_available(API_URL)
+    if FORCE_STUB:
+        return True
+    api_awake()
+    return not chat_available(API_URL)
 
 
 def state() -> Any:

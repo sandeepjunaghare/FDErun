@@ -1,7 +1,8 @@
 """HTTP client for the API: POST /chat as server-sent events, GET /recent, and the /chat probe."""
 
 import json
-from collections.abc import Iterable, Iterator
+import time
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 import httpx
@@ -11,9 +12,12 @@ from models import ChatRequest, RecentCondition
 
 ChatEvent = tuple[str, dict[str, Any]]
 
-# An answerable briefing takes 6.5–8 s before the first token; leave plenty of room.
-CHAT_TIMEOUT = httpx.Timeout(60, connect=5)
+# A briefing took up to 41 s on Render, plus ~33 s if the API was asleep; leave room for both.
+CHAT_TIMEOUT = httpx.Timeout(120, connect=5)
 SHORT_TIMEOUT = httpx.Timeout(10)
+# Render's free plan sleeps when idle; while it wakes, its proxy answers 502/503/504 at once.
+WAKE_WAIT_S = 90
+WAKING_STATUSES = {502, 503, 504}
 
 
 class UiApiError(Exception):
@@ -86,6 +90,38 @@ def get_recent(
         return [RecentCondition.model_validate(row) for row in rows]
     except (httpx.HTTPError, ValueError, ValidationError):
         return []
+    finally:
+        if client is None:
+            http.close()
+
+
+def wake_api(
+    api_url: str,
+    *,
+    wait_s: float = WAKE_WAIT_S,
+    client: httpx.Client | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> bool:
+    """Poll GET /health until it answers 200 or `wait_s` passes; True if the API is up.
+
+    Retries on Render's waking statuses and on transport errors; any other status stops early.
+    """
+    http = client or httpx.Client(timeout=SHORT_TIMEOUT)
+    deadline = clock() + wait_s
+    try:
+        while True:
+            try:
+                r = http.get(f"{api_url}/health")
+                if r.is_success:
+                    return True
+                if r.status_code not in WAKING_STATUSES:
+                    return False
+            except httpx.HTTPError:
+                pass
+            if clock() >= deadline:
+                return False
+            sleep(2)
     finally:
         if client is None:
             http.close()
