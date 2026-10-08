@@ -64,7 +64,7 @@ docs/tickets/<slug>.md    # (per scenario) 4 parallel tickets, one per pane — 
 .claude/plans/ reports/   # plans and implementation reports written by the PIV skills (committed)
 .worktreeinclude          # gitignored files /worktree-create copies into each worktree (.env, course skills)
 .gitleaks.toml            # secret-scan rules (CI): defaults + Anthropic any-prefix, Voyage, Postgres URL with password
-render.yaml               # Render Blueprint: Docker, virginia, /health, deploys after CI passes, DATABASE_URL set in dashboard
+render.yaml               # Render Blueprint: fderun-api + fderun-ui (Docker, virginia), deploy after CI passes, DATABASE_URL set in dashboard
 .github/workflows/ci.yml  # CI: ruff + pyright (api, evals, ui), unit tests (api, evals), gitleaks, Docker build, integration (only if DATABASE_URL secret set)
 docker-compose.yml        # local run: api on 8710, ui on 8711 (the DB is Supabase cloud, not a container)
 .env.example              # every env var the stack uses; copy to .env
@@ -83,7 +83,7 @@ own worktree via `/pane`, which owns disjoint folders; shared files (`api/main.p
 
 | Rubric item | Where | Status |
 |---|---|---|
-| Deployment | `render.yaml`, `api/Dockerfile`, `scripts/smoke.sh`, `docs/runbook-deploy.md` | verified: push → CI → auto-deploy (~35 s) → smoke OK; clean-slate deploy rehearsed in 1:29; local fallback (api + ui) rehearsed: Docker ~50 s cold / 8 s warm, uv ~4 s (`docs/runbook-local.md`) |
+| Deployment | `render.yaml`, `api/Dockerfile`, `ui/Dockerfile`, `scripts/smoke.sh`, `docs/runbook-deploy.md` | verified: api + ui on Render (`fderun-ui` shows API + DB ✅, 2026-10-07); push → CI → auto-deploy (~35 s) → smoke OK; clean-slate deploy rehearsed in 1:29; local fallback (api + ui) rehearsed: Docker ~50 s cold / 8 s warm, uv ~4 s (`docs/runbook-local.md`) |
 | GitHub | `README.md`, `.github/workflows/ci.yml` | verified: CI green on the last 20 pushes (lint, types, unit tests, evals harness, ui lint + types, gitleaks, Docker build); README has the Handoff section |
 | Vector DB | `api/db/`, `api/db/migrations/` | connection + smoke table built; documents/chunks table planned |
 | Embedding model | `api/rag/`, `EMBEDDING_*` + `VOYAGE_API_KEY` in `.env` | chosen + verified: voyage-4, 1024 dims → `vector(1024)` (`scripts/check_embeddings.py`); rag/ client planned |
@@ -92,7 +92,7 @@ own worktree via `/pane`, which owns disjoint folders; shared files (`api/main.p
 | Memory | `api/memory/` | planned |
 | Guardrails | `api/schemas/`, `api/guardrails/` | planned |
 | LLM Eval | `evals/` | verified: harness tested (fake target); real Claude judge (claude-haiku-4-5) passes the example set (`evals/results/20261006-162139-example.json`) and flags an unsupported claim (`pytest -m integration`), Langfuse traces on; per-scenario golden set + `/ask` on the day |
-| Front end | `ui/` | skeleton verified: Streamlit shows API + DB status, runs in Docker and with uv (`docs/runbook-local.md`); chat view planned |
+| Front end | `ui/` | skeleton verified: Streamlit shows API + DB status, runs in Docker, with uv (`docs/runbook-local.md`) and on Render (https://fderun-ui.onrender.com); chat view planned |
 
 ## Ground rules
 

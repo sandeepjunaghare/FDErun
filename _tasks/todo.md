@@ -574,12 +574,23 @@ the API's Render URL. Proving it now with the skeleton means the session only re
       both services; free-plan note: warm the API before the UI
 - [x] `docs/runbook-kickoff.md` — §0 step 4 and §8 add the UI check
 - [x] `README.md` — replace "The Streamlit UI will be a second service" with the live setup
-- [ ] Commit + push (`feat: deploy Streamlit UI as second Render service — deployment`)
+- [x] Commit + push (`feat: deploy Streamlit UI as second Render service — deployment`)
 
 ## Verification
 
-- [ ] `render.yaml` parses (yaml load) and CI is green on the push
-- [ ] Render creates `fderun-ui` (Blueprint sync); `scripts/smoke.sh … latest --wait` still `SMOKE OK`
-- [ ] `curl https://fderun-ui.onrender.com/_stcore/health` → `ok`
-- [ ] Open the UI page in the browser: sidebar shows ✅ for `/health`, `/version`, `/health/db`
-- [ ] Then: CLAUDE.md rubric map, Deployment row → "api + ui verified on Render"
+- [x] `render.yaml` parses (yaml load) and CI is green on the push
+- [x] Render creates `fderun-ui` (Blueprint sync); `scripts/smoke.sh … latest --wait` still `SMOKE OK`
+- [x] `curl https://fderun-ui.onrender.com/_stcore/health` → `ok`
+- [x] Open the UI page in the browser: sidebar shows ✅ for `/health`, `/version`, `/health/db`
+- [x] Then: CLAUDE.md rubric map, Deployment row → "api + ui verified on Render"
+
+## Review
+
+2026-10-07, commit e4c272c. CI green (all 6 jobs). Render's Blueprint auto-synced and created `fderun-ui`; no dashboard step.
+
+- Worked: `/_stcore/health` → `ok` about 20 s after CI; `/` serves Streamlit; websocket upgrade on `/_stcore/stream` → 101
+  through Render's proxy. API smoke unaffected.
+- Sidebar's three ✅ + "Connected" confirmed by the user in a real browser (API_URL wiring OK). I couldn't check it myself:
+  the checks run in Streamlit's backend (curl can't see them) and headless Chrome screenshots came back blank.
+- Improve: a scriptable UI check (e.g. a real-browser screenshot step) so this doesn't need a human.
+- Note: Streamlit now runs on uvicorn (`x-render-origin-server: uvicorn`), so that header doesn't identify the service.
