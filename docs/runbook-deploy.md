@@ -15,8 +15,8 @@ git push → GitHub CI (lint, types, tests, Docker build) → Render auto-deploy
 - Both services are defined in [`render.yaml`](../render.yaml) (a Render Blueprint): Docker, free plan, region `virginia` (next to Supabase us-east-1), auto-deploy after CI passes.
   - `fderun-api`: health check `/health`, redeploys only when `api/**` changes.
   - `fderun-ui` (Streamlit): health check `/_stcore/health`, redeploys only when `ui/**` changes. `API_URL` points at `https://fderun-api.onrender.com`, set in `render.yaml` (not a secret).
-- The only secret is `DATABASE_URL`, entered in the Render dashboard. It is never in git.
-- The database is Supabase, shared by local runs and Render. Migrations run from your machine.
+- Three secrets on `fderun-api`, entered in the Render dashboard and never in git: `DATABASE_URL`, `ANTHROPIC_API_KEY` (planner, answerer, critic) and `VOYAGE_API_KEY` (query embeddings). `render.yaml` declares them with `sync: false`, so Render prompts for each on a new Blueprint.
+- The database is Supabase, shared by local runs and Render. Migrations and corpus ingest run from your machine.
 
 ---
 
@@ -32,6 +32,14 @@ These are done once per account or database, not per deploy.
    ```
 
    Re-running is safe: already-applied files are skipped.
+
+3. **Corpus is loaded.** Needed once per database, and again after the corpus changes. Without it every briefing is refused for lack of sources (the smoke test still passes, because it doesn't touch the corpus):
+
+   ```bash
+   cd api && uv run python -m rag.ingest ../corpus/condition-briefing && cd ..
+   ```
+
+   Re-running is safe: chunk ids are stable, so it upserts rather than duplicates.
 
 ---
 
@@ -70,7 +78,7 @@ It prints the URL with the password masked. It must start with `postgresql://pos
 
 **2. Create the Blueprint.** Select `sandeepjunaghare/FDErun` → name it (e.g. `fde`).
 
-**3. Paste `DATABASE_URL` and deploy.** Cmd+V into the `DATABASE_URL` field (it should start with `postgresql://`, with no `DATABASE_URL=`, quotes or `<placeholders>`) → **Deploy Blueprint**.
+**3. Paste the secrets and deploy.** Cmd+V into the `DATABASE_URL` field (it should start with `postgresql://`, with no `DATABASE_URL=`, quotes or `<placeholders>`). Paste `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` from `.env` the same way: value only, no `KEY=` prefix, no quotes → **Deploy Blueprint**. Have both keys open before you start the timer, because step 1's clipboard holds only the URL.
 
 **4. Start the wait-and-smoke** right away, then don't touch anything. It prints dots until the deploy answers with the same `api/` code as your `HEAD`, then runs the smoke test. No need to watch Render's log or copy the URL.
 
