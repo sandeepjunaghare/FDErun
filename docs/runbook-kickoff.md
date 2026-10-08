@@ -34,9 +34,9 @@ an old one, or a `create table if not exists chunks` would quietly reuse the old
 return another scenario's text. So the day runs on a new, empty project:
 
 1. Supabase → New project (region us-east-1, next to Render's virginia) → Database → Extensions → `vector`.
-2. Connect → Session pooler URL → `DATABASE_URL` in `.env` and in Render → fde-api → Environment.
+2. Connect → Session pooler URL → `DATABASE_URL` in `.env` and in Render → fderun-api → Environment.
 3. `uv run --script scripts/check_db.py` → `cd api && uv run python -m db.migrate` (only `0001_smoke.sql`).
-4. `scripts/smoke.sh` locally, then `scripts/smoke.sh https://fde-api.onrender.com latest --wait`.
+4. `scripts/smoke.sh` locally, then `scripts/smoke.sh https://fderun-api.onrender.com latest --wait`.
 5. Render → Environment also has `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` (declared in `render.yaml`).
 
 ---
@@ -155,7 +155,7 @@ refuses. Works → step 8. Doesn't → fix on `main` and re-check; don't push a 
 
 ```bash
 git push
-scripts/smoke.sh https://fde-api.onrender.com latest --wait
+scripts/smoke.sh https://fderun-api.onrender.com latest --wait
 ```
 
 Migrations already ran in step 7 (local and Render share one database). Full procedure:

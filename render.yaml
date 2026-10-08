@@ -2,7 +2,7 @@
 # The DB is Supabase (not Render); run migrations from your machine first: cd api && uv run python -m db.migrate
 services:
   - type: web
-    name: fde-api
+    name: fderun-api
     runtime: docker
     plan: free
     region: virginia # closest to Supabase us-east-1

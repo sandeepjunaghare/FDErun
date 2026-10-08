@@ -1,6 +1,6 @@
-# FDE Starter Kit
+# FDErun
 
-[![CI](https://github.com/sandeepjunaghare/FDEStarterKit/actions/workflows/ci.yml/badge.svg)](https://github.com/sandeepjunaghare/FDEStarterKit/actions/workflows/ci.yml)
+[![CI](https://github.com/sandeepjunaghare/FDErun/actions/workflows/ci.yml/badge.svg)](https://github.com/sandeepjunaghare/FDErun/actions/workflows/ci.yml)
 
 A retrieval-augmented (RAG) assistant built as a four-agent pipeline that answers only from your documents, cites its sources, and refuses what is out of scope.
 
@@ -203,7 +203,7 @@ local: scripts/smoke.sh   →   git push   →   CI green   →   Render builds 
 
    | Setting | Value |
    |---|---|
-   | Service | `fde-api`, Docker, free plan, region `virginia` (next to Supabase us-east-1) |
+   | Service | `fderun-api`, Docker, free plan, region `virginia` (next to Supabase us-east-1) |
    | Build | `api/Dockerfile`, context `api/` |
    | Health check | `/health` |
    | Auto-deploy | after GitHub checks pass, only when `api/**` changes |

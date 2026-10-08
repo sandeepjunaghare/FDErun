@@ -13,7 +13,7 @@ Switch as soon as one of these is true. Don't debug Render on camera.
 - **CI is red** and there's no time to fix it. Render deploys only after CI passes (`checksPass`), so the
   latest code never reaches Render.
 - A deploy **failed twice** (`CLAUDE.md` rule: run locally and say so).
-- `scripts/smoke.sh https://fde-api.onrender.com latest --wait` fails, or hangs past 5 minutes.
+- `scripts/smoke.sh https://fderun-api.onrender.com latest --wait` fails, or hangs past 5 minutes.
 
 ## Route A: Docker (same images as Render)
 
@@ -75,7 +75,7 @@ database. `version` says `local`, and the smoke and evals are the same checks th
 Fix CI (or wait out Render), push, then:
 
 ```bash
-scripts/smoke.sh https://fde-api.onrender.com latest --wait
+scripts/smoke.sh https://fderun-api.onrender.com latest --wait
 docker compose down
 ```
 

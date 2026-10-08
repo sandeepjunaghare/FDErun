@@ -3,7 +3,7 @@
   cd evals
   uv run python run.py golden/example.yaml --target fake          # harness self-test, no API
   uv run python run.py golden/<scenario>.yaml                       # local API at http://localhost:8710
-  uv run python run.py golden/<scenario>.yaml --target https://fde-api.onrender.com
+  uv run python run.py golden/<scenario>.yaml --target https://fderun-api.onrender.com
   ... --only case-a,case-b   --no-judge   --compare results/<earlier>.json   --k 5
 
 Exit code: 0 every threshold met · 1 a threshold missed, a case errored, or the judge

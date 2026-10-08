@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     await pool.close()
 
 
-app = FastAPI(title="FDE Starter Kit API", lifespan=lifespan)
+app = FastAPI(title="FDErun API", lifespan=lifespan)
 
 
 @app.get("/health")

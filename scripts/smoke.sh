@@ -2,9 +2,9 @@
 # Deploy smoke test: liveness, deployed commit, DB + pgvector, and a write/read/vector-search
 # roundtrip (rolled back).
 # Usage: scripts/smoke.sh [base_url] [latest|expected_sha] [--wait]   (default http://localhost:8710)
-#   scripts/smoke.sh https://fde-api.onrender.com latest          # FAILs unless live api/ code equals HEAD's
-#   scripts/smoke.sh https://fde-api.onrender.com latest --wait   # first waits (up to 5 min) for that
-#   scripts/smoke.sh https://fde-api.onrender.com 52c6029         # FAILs unless exactly that commit is live
+#   scripts/smoke.sh https://fderun-api.onrender.com latest          # FAILs unless live api/ code equals HEAD's
+#   scripts/smoke.sh https://fderun-api.onrender.com latest --wait   # first waits (up to 5 min) for that
+#   scripts/smoke.sh https://fderun-api.onrender.com 52c6029         # FAILs unless exactly that commit is live
 # "latest" compares api/ trees, because Render only redeploys on api/ changes (buildFilter), so the
 # live commit is legitimately older than HEAD after a docs-only push.
 set -euo pipefail
