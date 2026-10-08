@@ -96,7 +96,7 @@ build straight from it, so a vague line here becomes a guess in two panes:
 ## 4. Tickets (0:34–0:38)
 
 ```
-/piv-slice-epic docs/<slug>.prd.md docs/architecture.md · local tracker: docs/tickets/<slug>.md · Slice into exactly 4 tickets that run in parallel, one per pane, each owning disjoint folders: A = api/agents api/schemas api/guardrails api/memory + shared files (api/main.py api/config.py api/pyproject.toml .env.example CLAUDE.md); B = api/rag api/db/migrations evals; C = ui + the ui service in docker-compose.yml (build on the existing skeleton: keep ui/Dockerfile and .streamlit/config.toml); D = README.md docs render.yaml + non-technical visual. Name them T1–T4 for panes A–D. Cross-pane needs go to pane A as explicit interface notes.
+/piv-slice-epic docs/<slug>.prd.md docs/architecture.md · local tracker: docs/tickets/<slug>.md · Slice into exactly 4 tickets that run in parallel, one per pane, each owning disjoint folders: A = api/agents api/schemas api/guardrails api/memory + shared files (api/main.py api/config.py api/pyproject.toml .env.example CLAUDE.md); B = api/rag (including an idempotent `python -m rag.ingest <corpus-dir>` entry point) api/db/migrations evals; C = ui + the ui service in docker-compose.yml (build on the existing skeleton: keep ui/Dockerfile and .streamlit/config.toml); D = README.md docs render.yaml + non-technical visual. Name them T1–T4 for panes A–D. Cross-pane needs go to pane A as explicit interface notes.
 ```
 
 Commit before branching, or the worktrees won't have the docs:
@@ -141,13 +141,17 @@ Then run `/piv-validate` on the merged result. **Don't push yet.**
 **Local end-to-end check (~3 min), the gate before deploy.** As soon as everything is merged, show the whole app
 working on the laptop with plain uv (same Supabase database as Render):
 
-Three terminals, each starting at the repo root (migrate is a no-op when nothing is new):
+Three terminals, each starting at the repo root (migrate is a no-op when nothing is new; ingest re-embeds and upserts, so re-running is safe):
 
 ```bash
-cd api && uv run python -m db.migrate && uv run uvicorn main:app --port 8710   # terminal 1
+cd api && uv run python -m db.migrate && uv run python -m rag.ingest <corpus-dir> \
+  && uv run uvicorn main:app --port 8710                                      # terminal 1
 cd ui && uv run streamlit run app.py                                          # terminal 2
 scripts/smoke.sh --wait                                                       # terminal 3
 ```
+
+`rag.ingest` is pane B's entry point (`api/rag/`); use the name and arguments its ticket settles on. Without it
+the vector table is empty: answers come back with no citations and the eval hit rate is 0.
 
 Open <http://localhost:8711> and ask 2–3 golden questions: one answered with citations, one the domain rule
 refuses. Works → step 8. Doesn't → fix on `main` and re-check; don't push a broken app to find out on Render.
@@ -162,7 +166,7 @@ scripts/smoke.sh https://fderun-api.onrender.com latest --wait
 Then open <https://fderun-ui.onrender.com> and run one in-scope question and one refusal in the deployed chat. If pane C's
 UI changes are merged, Render redeploys `fderun-ui` on the same push (about the same time as the API).
 
-Migrations already ran in step 7 (local and Render share one database). Full procedure:
+Migrations and ingest already ran in step 7 (local and Render share one database). Full procedure:
 `docs/runbook-deploy.md`. Render failing or CI red with no time to fix: `docs/runbook-local.md`.
 
 ---

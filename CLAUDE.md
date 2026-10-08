@@ -118,6 +118,7 @@ own worktree via `/pane`, which owns disjoint folders; shared files (`api/main.p
 - test: `cd api && uv run pytest` (unit, no network) · `uv run pytest -m integration` (real Supabase)
 - run: `cd api && uv run uvicorn main:app --reload --port 8710` · `cd ui && uv run streamlit run app.py` (port 8711) · both in Docker: `docker compose up --build` · fallback steps: `docs/runbook-local.md`
 - migrate: `cd api && uv run python -m db.migrate` (local and Render share one Supabase DB, so run it once from here)
+- ingest (planned, pane B): `cd api && uv run python -m rag.ingest <corpus-dir>` after migrate, from here only; idempotent upsert on stable chunk ids, re-embeds on each run
 - smoke: `scripts/smoke.sh` (local) · `scripts/smoke.sh https://fderun-api.onrender.com latest --wait` (Render; waits until the live api/ code matches HEAD)
 - copy DATABASE_URL for a dashboard: `scripts/copy-db-url.sh` · full deploy procedure: `docs/runbook-deploy.md`
 - DB check without the API: `uv run --script scripts/check_db.py` · embeddings: `uv run --script scripts/check_embeddings.py`

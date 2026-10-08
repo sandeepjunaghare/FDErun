@@ -100,7 +100,15 @@ cd api && uv run python -m db.migrate
 
 Applies each file in `api/db/migrations/` once, in order (re-running is a no-op). Local and Render share the same Supabase database, so this only ever runs from your machine. Every table has row-level security enabled, which keeps it out of Supabase's public REST API.
 
-### 4. Start the API
+### 4. Load the documents (planned)
+
+```bash
+cd api && uv run python -m rag.ingest <corpus-dir>
+```
+
+Chunks each document, embeds it with Voyage (`input_type="document"`) and upserts it into pgvector. Chunk ids are stable (`<doc stem>-<ord>`), so re-running only updates what changed and never duplicates. Like migrations, it runs once from your machine against the shared database; Render never runs it. Skip it and the API starts fine but retrieves nothing, so every answer comes back without citations. The module is built by pane B (`api/rag/`); its ticket sets the final name and arguments.
+
+### 5. Start the API
 
 ```bash
 cd api
@@ -116,7 +124,7 @@ docker compose up --build
 
 Render down or CI red? `docs/runbook-local.md` runs and demos the whole app locally, with Docker or plain uv.
 
-### 5. Verify
+### 6. Verify
 
 ```bash
 scripts/smoke.sh            # defaults to http://localhost:8710
@@ -198,7 +206,7 @@ local: scripts/smoke.sh   →   git push   →   CI green   →   Render builds 
 
 ### One-time setup
 
-1. Apply migrations from your machine (see Run → step 3).
+1. Apply migrations and load the documents from your machine (see Run → steps 3 and 4).
 2. Render → **New → Blueprint** → connect this GitHub repo. Render reads `render.yaml`:
 
    | Setting | Value |
