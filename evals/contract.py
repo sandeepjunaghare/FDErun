@@ -1,7 +1,8 @@
 """Data contracts: what POST /ask returns (pane A implements it) and what a golden set contains.
 
 POST /ask
-  request:  {"question": str, "user_id": str}
+  request:  {"question": str, "user_id": str, "session_id": str (optional)}
+            session_id is sent only for golden cases that share a `session` (follow-ups).
   response: AskResponse below. `retrieved` is what the retriever returned, in rank order;
             `citations` are chunk_ids from `retrieved` that the answer relies on; `action` says
             what the guardrails did.
@@ -10,6 +11,7 @@ POST /chat takes the same request, runs the same pipeline and streams SSE; its f
 is this same AskResponse, so the UI and the evals see one answer shape.
 """
 
+from datetime import date
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -23,6 +25,10 @@ class RetrievedChunk(BaseModel):
     doc: str
     text: str
     score: float | None = None
+    # Labels from the corpus front matter, so the UI can show source and date per citation.
+    section: str | None = None
+    source_label: str | None = None
+    as_of: date | None = None
 
 
 class AskResponse(BaseModel):
@@ -47,6 +53,8 @@ class GoldenCase(BaseModel):
     expected_sources: list[ExpectedSource] = Field(default_factory=list)
     reference_answer: str | None = None
     user_id: str = "eval"
+    # Cases with the same session run in file order, one after another, in one API session.
+    session: str | None = None
 
     @model_validator(mode="after")
     def _defaults_and_checks(self) -> Self:

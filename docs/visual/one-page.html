@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>One-page visual</title>
+<title>Condition Briefings</title>
 <!--
   Non-technical one-pager (16:9, screenshot- or present-ready). Edit ONLY the `page` object below.
   Rules: before/after framing, plain words, numbers a stakeholder cares about, no technical terms.
@@ -96,38 +96,39 @@
 </main>
 
 <script>
-// ===== Edit this object only. Example content: a fictional health-plan member. =====
+// ===== Edit this object only. Condition briefing for health-system strategists. =====
 const page = {
-  kicker: "Acme Health · member questions",
-  headline: "Members get a clear, trustworthy answer about their plan in seconds",
-  subhead: "Instead of searching long documents or waiting on hold.",
+  kicker: "Health-system strategy · condition briefings",
+  headline: "A sourced briefing on any condition in our sample set, in under a minute",
+  subhead: "Instead of waiting days for desk research to tell you the landscape.",
   beforeTitle: "Today",
   before: [
-    "A member wonders what a specialist visit will cost",
-    "They search a 60-page plan booklet, or call and wait on hold",
-    "They often give up, guess, or get a surprise bill later",
+    "A strategy discussion turns on a condition, like heart failure",
+    "Someone spends days pulling together scattered sources by hand",
+    "The briefing arrives partly out of date, shaped differently each time, and hard to trace",
   ],
-  beforeFeel: "“I never know what I'll pay until the bill arrives.”",
-  afterTitle: "With the assistant",
+  beforeFeel: "“By the time the research lands, the meeting has moved on.”",
+  afterTitle: "With condition briefings",
   after: [
-    "The member asks in their own words",
-    "They get a short answer with the exact page it came from",
-    "Anything risky, like medical advice, goes to a person instead",
+    "The strategist types a condition, even a short name like “CHF”",
+    "They get three parts: today's standard of care, treatments in development, key companies and institutions",
+    "Every statement shows its source and how recent it is; questions about a specific patient are declined",
   ],
-  afterFeel: "“I knew the cost before I booked.”",
+  afterFeel: "“I walked in knowing the landscape, and where each point came from.”",
   numbers: [
-    { big: "5 sec", was: "was: 12 min on hold", label: "to get an answer" },
-    { big: "100%", was: "every answer", label: "shows where it came from" },
-    { big: "0", was: "guesses on medical questions", label: "handed to a person instead" },
+    { big: "< 1 min", was: "was: days · target for the demo", label: "to a full three-part briefing" },
+    { big: "100%", was: "of statements · target", label: "show their source and date" },
+    { big: "8 of 10", was: "sample conditions · target", label: "accepted as a usable first draft" },
   ],
-  trustTitle: "Why people can trust it",
+  trustTitle: "Why strategists can trust it",
   trust: [
-    "Every answer points to the exact place in the plan documents",
-    "It says “I don't know” rather than guessing",
-    "Personal details are hidden before anything is stored",
+    "Each statement names its source and the date that source describes",
+    "Each part draws only on sources about that part, so a treatment in development never shows up as today's standard of care",
+    "It says “no sources for this condition” rather than guessing",
+    "The demo content is made up for testing; company and drug names are fictional and labeled so",
   ],
   nextTitle: "Next",
-  next: ["Pilot with 50 members", "Add claims status questions"],
+  next: ["Review the 10 sample briefings with the strategy team", "Swap in real sources, with a flag on any part that is out of date"],
 };
 
 // Words a non-technical reader shouldn't see. Matching is whole-word and case-insensitive.

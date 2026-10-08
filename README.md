@@ -1,12 +1,16 @@
-# FDErun
+# FDErun — Condition Briefing
 
 [![CI](https://github.com/sandeepjunaghare/FDErun/actions/workflows/ci.yml/badge.svg)](https://github.com/sandeepjunaghare/FDErun/actions/workflows/ci.yml)
 
-A retrieval-augmented (RAG) assistant built as a four-agent pipeline that answers only from your documents, cites its sources, and refuses what is out of scope.
+A health-system strategist enters a medical condition and gets, in under a minute, a briefing in three sections: **current standard of care**, **emerging treatments**, and **key companies and institutions**. Every claim cites a source, and the source label and as-of date show next to it. Clinical or patient-specific questions, unknown conditions and anything unrelated are refused rather than answered.
 
-**Stack:** Anthropic Messages API · FastAPI (SSE) · Supabase Postgres + pgvector · Streamlit · Langfuse · Docker → Render
+**Stack:** Anthropic Messages API · FastAPI (SSE) · Supabase Postgres + pgvector · Voyage embeddings · Streamlit · Langfuse · Docker → Render
 
-> **Status:** the API skeleton, Supabase connection and health checks are built and tested. The agents, retrieval, memory, UI and evals below are the target design and land incrementally. Each section marks what exists today.
+> **Synthetic data.** The corpus is a synthetic sample: 10 chronic-care conditions × 3 sections = 30 documents. Standard of care is real at a general level; every company, drug code and trial network is fictional and tagged "(fictional)". No real health data or patient information enters the system. Data card: [`corpus/condition-briefing/README.md`](corpus/condition-briefing/README.md).
+
+> **Status:** deploy, health checks, database, eval harness and the corpus are built and verified. The pipeline (`api/agents/`), retrieval and ingest (`api/rag/`), memory and the briefing UI are built in parallel tickets ([`docs/tickets/condition-briefing.md`](docs/tickets/condition-briefing.md)); the layout below marks what exists today.
+
+Intent: [`docs/condition-briefing.prd.md`](docs/condition-briefing.prd.md) · design: [`docs/architecture.md`](docs/architecture.md)
 
 ---
 
@@ -14,33 +18,43 @@ A retrieval-augmented (RAG) assistant built as a four-agent pipeline that answer
 
 ```mermaid
 flowchart LR
-    U[User] --> UI[Streamlit UI]
+    U[Strategist] --> UI[Streamlit UI]
     UI -- "POST /chat (SSE)" --> API[FastAPI]
     EV[Eval harness] -- "POST /ask (JSON)" --> API
-    subgraph Pipeline [Agent pipeline]
-        P[Planner / router] -->|in scope| R[Retriever]
+    subgraph Pipeline [Four stages, two decision points]
+        P{{"① Planner<br/>briefing · follow-up · out of scope"}} -->|briefing / follow-up| R["Retriever (function)<br/>3 searches: condition × section"]
         P -->|out of scope| X[Refusal]
-        R --> A[Answerer<br/>with citations]
-        A --> C[Critic / guardrail]
+        R --> A[Answerer<br/>3-section briefing, cited]
+        A --> C{{"② Critic<br/>code checks, then faithfulness"}}
+        C -->|fail, once| A
+        C -->|fail again| X
     end
     API --> P
-    C -- streamed answer --> UI
+    C -- "pass → streamed briefing" --> UI
     R <--> DB[(Supabase Postgres<br/>pgvector)]
-    API <--> M[(Memory<br/>session + user profile)]
+    API <--> M[(Memory<br/>session turns + recent conditions)]
     M --- DB
-    R -.-> E[Hosted embedding model]
+    R -.-> E[Voyage embeddings]
     API -.-> L[Langfuse<br/>traces + evals]
 ```
 
+1. **Planner** (decision point ①, `claude-haiku-4-5`): classifies the request as a briefing, a follow-up about the current briefing, or out of scope, and resolves the condition from its name or an alias ("CHF" → heart failure). Out of scope is refused before any retrieval runs.
+2. **Retriever**: three searches, one per section, each filtered to the resolved condition and that section, so every section draws only on evidence labeled for it.
+3. **Answerer** (`claude-sonnet-5-5`): drafts the briefing under three fixed headings, citing a chunk for every claim.
+4. **Critic** (decision point ②, `claude-haiku-4-5`): code checks first (citations present, every citation was retrieved, each claim cites only chunks from its own section), then a model check that every claim is supported. Fail → the answerer retries once → refuse. Nothing unchecked is streamed.
+
+**Why the retriever is a function, not an agent:** it has no choice to make. Given a condition and a section the search is fully determined, so a model call would only add latency and a way to be wrong. Autonomy sits only where there is a real decision: the planner's routing and the critic's gate. Each is a separate model call with its own prompt and typed contract, so the stage that writes the briefing never also approves it. Alternatives considered (one tool-using model in a loop; functions plus one model call) and why they lost: [`docs/architecture.md`](docs/architecture.md#approaches-considered).
+
 | Component | Choice | Why |
 |---|---|---|
-| Orchestration | Planner → Retriever → Answerer → Critic | Each agent has one job; the critic is the last gate before the user |
+| Orchestration | Planner → retriever (function) → answerer → critic, one critic → answerer retry | Predictable and testable stage by stage; the critic is the last gate before the user |
 | Framework | Anthropic Messages API, FastAPI with SSE | Outputs are checked against Pydantic schemas, so guardrails live in code, not prompts |
-| Vector DB | pgvector on Supabase | One managed Postgres holds vectors and user memory, identical locally and on Render |
-| Embeddings | Voyage AI `voyage-4`, 1024 dims, $0.06/1M tokens (200M free) | Anthropic's recommended provider; 1024 fits a pgvector HNSW index; swapping is one config line |
-| Memory | Session (conversation) + persistent (user profile in Postgres) | Two layers, scoped per user, both visible in the UI |
-| Guardrails | Pydantic schemas, scope classifier, PII redaction, required citations, out-of-scope refusal, one domain rule | The cost of a wrong answer decides how strict to be |
-| Front end | Streamlit | Fastest path to a usable chat UI with citations and memory on screen |
+| Vector DB | pgvector on Supabase | One managed Postgres holds vectors, labels and user memory, identical locally and on Render |
+| Retrieval | Semantic search with a hard filter on condition + section, top-k per section | Once filtered, the candidate set is a handful of chunks; keyword search is deferred and added back only if the eval hit rate falls short |
+| Embeddings | Voyage AI `voyage-4`, 1024 dims | Anthropic's recommended provider; 1024 fits a pgvector HNSW index; swapping is one config line |
+| Memory | Session turns (follow-ups answer from the same evidence) + per-user recent conditions | Two layers, scoped per user, both visible in the UI |
+| Guardrails | Scope refusal, PII redaction on input, required citations, **section integrity** (the domain rule) | A claim in the wrong section is the PRD's failure condition, so it is enforced in code |
+| Front end | Streamlit | Fastest path to a briefing view with source labels, as-of dates and memory on screen |
 
 Full decision log: [`research/tech-stack.md`](research/tech-stack.md).
 
@@ -49,18 +63,23 @@ Full decision log: [`research/tech-stack.md`](research/tech-stack.md).
 ```
 api/                  FastAPI service (Render web service)
   main.py             app, DB pool lifespan, health + smoke routes ✅ built
+                      POST /ask, POST /chat, GET /recent           ⏳ T1
   config.py           settings from environment                   ✅ built
   db/                 pool, health probe, smoke, SQL migrations   ✅ built
+    migrations/       conditions, documents, chunks, memory       ⏳ T2
+  agents/ schemas/ guardrails/ memory/   pipeline + checks         ⏳ T1
+  rag/                ingest, search, conditions                  ⏳ T2
   tests/              pytest (unit + Supabase integration)        ✅ built
-  agents/ schemas/ guardrails/ memory/ rag/                       ⏳ planned
 ui/                   Streamlit app: API + DB status skeleton     ✅ built
-                      chat view, second Render service            ⏳ planned
+                      briefing view, sources, recent conditions   ⏳ T3
 evals/                eval harness: runner, metrics, Claude judge ✅ built
-  golden/<scenario>.yaml  per-scenario golden set                 ⏳ planned
+  golden/condition-briefing.yaml  10–15 cases                     ⏳ T2
+corpus/condition-briefing/  30 synthetic documents + data card    ✅ built
 scripts/check_db.py   standalone Supabase + pgvector check        ✅ built
-scripts/smoke.sh      deploy smoke test for any URL               ✅ built
+scripts/check_corpus.py  corpus label check                       ✅ built
 scripts/check_embeddings.py  Voyage embedding check (voyage-4, 1024)  ✅ built
-render.yaml           Render Blueprint                            ✅ built
+scripts/smoke.sh      deploy smoke test for any URL               ✅ built
+render.yaml           Render Blueprint (api + ui)                 ✅ built
 docker-compose.yml    local container run                         ✅ built
 ```
 
@@ -80,7 +99,15 @@ docker-compose.yml    local container run                         ✅ built
 cp .env.example .env   # .env is gitignored
 ```
 
-Set `DATABASE_URL` (Supabase → Connect → Direct → **Session pooler**, port 5432). The other keys in [`.env.example`](.env.example) are only needed as the agents, evals and UI land.
+Set three keys:
+
+| Key | Where it comes from | Used by |
+|---|---|---|
+| `DATABASE_URL` | Supabase → Connect → Direct → **Session pooler**, port 5432 | everything |
+| `ANTHROPIC_API_KEY` | console.anthropic.com → API keys | planner, answerer, critic; the eval judge |
+| `VOYAGE_API_KEY` | dash.voyageai.com → API keys | ingest (document embeddings) and the retriever (query embeddings) |
+
+The other keys in [`.env.example`](.env.example) have working defaults (embedding model and dimension, eval judge model, `API_URL`) or are optional (Langfuse).
 
 Use the **session pooler**, not the direct connection: the direct host is IPv6-only on the free plan and fails from Docker and Render.
 
@@ -100,23 +127,25 @@ cd api && uv run python -m db.migrate
 
 Applies each file in `api/db/migrations/` once, in order (re-running is a no-op). Local and Render share the same Supabase database, so this only ever runs from your machine. Every table has row-level security enabled, which keeps it out of Supabase's public REST API.
 
-### 4. Load the documents (planned)
+This creates the `conditions`, `documents` and `chunks` tables (condition and section are carried on every chunk, so retrieval is one filtered query) and the memory tables (`sessions`, `turns`, `recent_conditions`).
+
+### 4. Load the corpus
 
 ```bash
-cd api && uv run python -m rag.ingest <corpus-dir>
+uv run --script scripts/check_corpus.py corpus/condition-briefing   # labels check, from the repo root
+cd api && uv run python -m rag.ingest ../corpus/condition-briefing
 ```
 
-Chunks each document, embeds it with Voyage (`input_type="document"`) and upserts it into pgvector. Chunk ids are stable (`<doc stem>-<ord>`), so re-running only updates what changed and never duplicates. Like migrations, it runs once from your machine against the shared database; Render never runs it. Skip it and the API starts fine but retrieves nothing, so every answer comes back without citations. The module is built by pane B (`api/rag/`); its ticket sets the final name and arguments.
+Ingest refuses a corpus that fails the labels check. It then reads each document's labels (condition, `section`, `source_label`, `as_of`), splits it into paragraph chunks, embeds them with Voyage (`input_type="document"`) and upserts them into pgvector. Chunk ids are stable (`<condition-slug>-<section>-<ord>`), so re-running never duplicates. Like migrations, it runs once from your machine against the shared database; Render never runs it. Skip it and the API starts but every briefing is refused for lack of sources.
 
-### 5. Start the API
+### 5. Start the API and the UI
 
 ```bash
-cd api
-uv sync
-uv run uvicorn main:app --reload --port 8710
+cd api && uv sync && uv run uvicorn main:app --reload --port 8710   # terminal 1
+cd ui && uv sync && uv run streamlit run app.py                      # terminal 2, http://localhost:8711
 ```
 
-Or API + UI in Docker, from the repo root (UI on <http://localhost:8711>):
+Or both in Docker, from the repo root (UI on <http://localhost:8711>):
 
 ```bash
 docker compose up --build
@@ -138,6 +167,15 @@ scripts/smoke.sh            # defaults to http://localhost:8710
 | smoke | `POST /smoke` | insert, read-back and vector similarity search on a real table, in one transaction that is rolled back, so nothing persists |
 
 Failures return **503** with the error class only (`UndefinedTable` means migrations haven't run). The API still starts when the database is down, so the failure is reported rather than crash-looping.
+
+Then ask for a briefing:
+
+```bash
+curl -s localhost:8710/ask -H 'content-type: application/json' \
+  -d '{"question": "Briefing on CHF", "user_id": "demo"}'
+```
+
+Expect `action: "answer"`, an `answer` with the three headings (`## Current standard of care`, `## Emerging treatments`, `## Key companies and institutions`), and `citations` that are ids in `retrieved`, each with its `section`, `source_label` and `as_of`. "CHF" resolves to heart failure. A patient-specific question ("what dose should my patient take?") or an unknown condition returns `action: "refuse"`. In the UI, the same request streams the stage in progress, then the briefing with the source label and as-of date beside each citation.
 
 ### Tests
 
@@ -174,22 +212,23 @@ To enable integration tests in CI: **Settings → Secrets and variables → Acti
 
 ## Eval
 
-> ✅ Harness built (`evals/`, see [`evals/README.md`](evals/README.md)). Per scenario: write the golden set; the API implements `POST /ask`.
+> ✅ Harness built (`evals/`, see [`evals/README.md`](evals/README.md)). ⏳ Golden set `evals/golden/condition-briefing.yaml` (T2) and `POST /ask` (T1) land with their tickets.
 
 | Metric | What it measures | How |
 |---|---|---|
-| Retrieval hit rate @k | Did retrieval find the passage that holds the answer? | Expected doc + snippet in the top-k chunks; deterministic, survives re-chunking |
-| Citations | Does every answer cite something it actually retrieved? | Deterministic |
-| Guardrails | Are out-of-scope, PII and domain-rule questions refused/redacted/escalated, and answerable ones not over-refused? | Deterministic |
+| Retrieval hit rate @k | Did each section's search find the passage that holds the answer? | Expected doc + snippet in the top-k chunks; deterministic, survives re-chunking |
+| Citations | Does every claim cite something it actually retrieved? | Deterministic |
+| Guardrails | Are out-of-scope, PII and domain-rule questions refused or redacted, and answerable ones not over-refused? | Deterministic |
 | Faithfulness | Is every claim supported by the retrieved text? | Claude as judge (Haiku 4.5), structured score + unsupported claims; optional Langfuse traces |
 
 ```bash
 cd evals
-uv run python run.py golden/<scenario>.yaml --target http://localhost:8710
-uv run python run.py golden/<scenario>.yaml --only <case-id> --compare results/<earlier>.json   # fix → rerun
+uv run python run.py golden/condition-briefing.yaml --target http://localhost:8710
+uv run python run.py golden/condition-briefing.yaml --only <case-id> --compare results/<earlier>.json   # fix → rerun
 ```
 
-- **Golden set:** 10–15 question/answer pairs with their source doc + snippet, including out-of-scope, PII and domain-rule cases.
+- **Golden set (10–15 cases):** briefings across the 10 conditions with the expected source per section, an alias ("CHF" → heart failure), a follow-up in the same session, out of scope (an unknown condition; the weather), the domain rule (patient-specific treatment advice → refuse) and PII (a question naming a patient → redact).
+- **Pass bar, from the PRD:** 100% of claims cited; ≤ 1 in 10 briefings with an unsupported or wrong-section claim; a briefing in under a minute. If the hit rate falls short, add keyword search (deferred, see Architecture) and revisit chunking before tuning prompts.
 - **Loop:** run, read the failing case's reason, fix the prompt, retrieval or guardrail, rerun just that case, then compare before → after.
 
 ---
@@ -198,7 +237,7 @@ uv run python run.py golden/<scenario>.yaml --only <case-id> --compare results/<
 
 > Step-by-step procedure, troubleshooting, rollback and password rotation: [`docs/runbook-deploy.md`](docs/runbook-deploy.md).
 
-Render builds the Docker image from this repo itself; nothing is built or uploaded from your machine. The service is defined in [`render.yaml`](render.yaml) (a Render Blueprint).
+Render builds the Docker images from this repo itself; nothing is built or uploaded from your machine. Both services are defined in [`render.yaml`](render.yaml) (a Render Blueprint).
 
 ```
 local: scripts/smoke.sh   →   git push   →   CI green   →   Render builds api/Dockerfile   →   scripts/smoke.sh <url>
@@ -206,18 +245,19 @@ local: scripts/smoke.sh   →   git push   →   CI green   →   Render builds 
 
 ### One-time setup
 
-1. Apply migrations and load the documents from your machine (see Run → steps 3 and 4).
+1. Apply migrations and load the corpus from your machine (Run → steps 3 and 4). Render never runs either.
 2. Render → **New → Blueprint** → connect this GitHub repo. Render reads `render.yaml`:
 
    | Setting | Value |
    |---|---|
-   | Service | `fderun-api`, Docker, free plan, region `virginia` (next to Supabase us-east-1) |
-   | Build | `api/Dockerfile`, context `api/` |
-   | Health check | `/health` |
-   | Auto-deploy | after GitHub checks pass, only when `api/**` changes |
-   | `DATABASE_URL` | entered when prompted: the same session-pooler URL as `.env`; never committed |
+   | Services | `fderun-api` and `fderun-ui`, Docker, free plan, region `virginia` (next to Supabase us-east-1) |
+   | Build | `api/Dockerfile` (context `api/`) and `ui/Dockerfile` (context `ui/`) |
+   | Health check | `/health` (api), `/_stcore/health` (ui) |
+   | Auto-deploy | after GitHub checks pass, only when that service's folder changes |
+   | Secrets (api) | `DATABASE_URL`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, entered when prompted (`sync: false`); the same values as `.env`; never committed |
+   | `API_URL` (ui) | set in `render.yaml`; a public URL, not a secret |
 
-   Paste only the URL: no `DATABASE_URL=` prefix, no quotes, no `<placeholders>`. The API refuses to start on any of those, and the deploy log says which. To copy it from `.env` (prints it with the password masked):
+   Paste only the value: no `KEY=` prefix, no quotes, no `<placeholders>`. The API refuses to start on a malformed `DATABASE_URL`, and the deploy log says why. To copy it from `.env` (prints it with the password masked):
 
    ```bash
    scripts/copy-db-url.sh
@@ -231,45 +271,44 @@ local: scripts/smoke.sh   →   git push   →   CI green   →   Render builds 
 
    `--wait` polls until the deploy is up, then runs the checks. `latest` also fails unless the live commit has the same `api/` code as your `HEAD`, so after a push you know the new code is serving, not the previous deploy. (Pushes that don't touch `api/` don't redeploy; `latest` accepts that because the API code is unchanged.)
 
-After that, every push to `main` that touches `api/` redeploys once CI is green.
+After that, every push to `main` that touches `api/` or `ui/` redeploys that service once CI is green.
 
 ### Notes
 
 - `/health` never touches the database, so a Supabase blip can't block a deploy. `scripts/smoke.sh` checks the data path.
 - The container listens on Render's `$PORT` (8710 in docker compose) and runs as a non-root user.
-- Free instances sleep when idle. The first request after a pause can take 30–60 s (the smoke script waits up to 90 s), so warm the URL before a demo.
-- The Streamlit UI is a second service, `fderun-ui` (`ui/Dockerfile`, health check `/_stcore/health`, redeploys only when `ui/**` changes), with `API_URL` set to the API's URL in `render.yaml`. Check it at <https://fderun-ui.onrender.com>: the sidebar shows ✅ for the API and database.
+- Free instances sleep when idle. The first request after a pause can take 30–60 s (the smoke script waits up to 90 s), so warm both URLs before a demo.
+- Check the UI at <https://fderun-ui.onrender.com>: the sidebar shows ✅ for the API and database.
 
 ---
 
 ## Handoff
 
-> Fields in `<angle brackets>` are filled in per scenario. Everything else holds for any deployment of this kit.
-
 ### What you're getting
 
 | Piece | Where | Start here |
 |---|---|---|
-| The product decision: problem, users, hypothesis, non-goals | `docs/<slug>.prd.md` | Read first |
-| The technical decisions and why | `docs/architecture.md`, `research/tech-stack.md` | Then this |
-| How the code is laid out, conventions, commands | `CLAUDE.md` | For anyone (or any agent) changing code |
-| Deploy, rollback, rotate the database password | `docs/runbook-deploy.md` | Before touching production |
-| Quality bar: golden set + eval harness | `evals/`, `evals/golden/<scenario>.yaml` | Before changing prompts, retrieval or guardrails |
-| A one-page explanation for non-technical readers | `docs/visual/one-page.html` | For stakeholders |
+| The product decision: problem, users, hypothesis, non-goals | [`docs/condition-briefing.prd.md`](docs/condition-briefing.prd.md) | Read first |
+| The technical decisions and why | [`docs/architecture.md`](docs/architecture.md), [`research/tech-stack.md`](research/tech-stack.md) | Then this |
+| The data: what's synthetic, labels, as-of dates | [`corpus/condition-briefing/README.md`](corpus/condition-briefing/README.md), [`docs/walkthrough-data.md`](docs/walkthrough-data.md) | Before showing it to anyone |
+| How the code is laid out, conventions, commands | [`CLAUDE.md`](CLAUDE.md) | For anyone (or any agent) changing code |
+| Deploy, rollback, rotate the database password | [`docs/runbook-deploy.md`](docs/runbook-deploy.md) | Before touching production |
+| Quality bar: golden set + eval harness | `evals/`, `evals/golden/condition-briefing.yaml` | Before changing prompts, retrieval or guardrails |
+| A one-page explanation for strategists | [`docs/visual/one-page.html`](docs/visual/one-page.html) | For stakeholders |
 
 ### Who owns what
 
 | Area | Owner | Why it matters |
 |---|---|---|
-| **Golden eval set** (`evals/golden/`) | **<client domain expert>**, with an engineer maintaining the harness | The set defines "correct". It must come from the people who know the answers, and grow with every real failure |
-| Source documents and their freshness | <data owner> | Answers are only as current as the documents behind them |
-| Guardrail rules (what it refuses or escalates) | <product owner>, reviewed by engineering | The cost of a wrong answer sets how strict these are |
+| **Golden eval set** (`evals/golden/`) | **A strategist on the health-system strategy team**, with an engineer maintaining the harness | The set defines "correct". It must come from the people who know the answers, and grow with every real failure |
+| Source documents, labels and their freshness | The strategy team's research lead (whoever replaces the synthetic corpus with real sources) | A briefing is only as current as its as-of dates; each section's date is shown on screen |
+| Guardrail rules (what it refuses: clinical and patient-specific advice, unknown conditions) | The strategy team's product owner, reviewed by engineering | The cost of a wrong answer sets how strict these are |
 | Prompts, retrieval, agents | Engineering | Change only with an eval run before and after (`run.py --compare`) |
 | Deploys, secrets, rotation | Engineering | `docs/runbook-deploy.md`; secrets live only in `.env` and Render, and CI blocks leaked keys |
 
 ### Changing it safely
 
-1. Run the eval set and save the result: `cd evals && uv run python run.py golden/<scenario>.yaml`.
+1. Run the eval set and save the result: `cd evals && uv run python run.py golden/condition-briefing.yaml`.
 2. Make the change, then re-run with `--compare results/<before>.json`. Ship only if no case broke.
 3. Every real-world wrong answer becomes a new golden case before it's fixed.
 
@@ -277,19 +316,22 @@ After that, every push to `main` that touches `api/` redeploys once CI is green.
 
 | Signal | Why | Where |
 |---|---|---|
-| Retrieval hit rate on sampled questions | Most wrong answers start as a retrieval miss | Eval harness on a weekly sample |
-| Refusal / escalation rate | Too high means users give up; too low means guardrails are leaking | `action` in `/ask` responses, Langfuse |
-| Faithfulness on sampled answers | Catches answers that sound right but aren't in the sources | Claude judge, Langfuse scores |
-| Answer latency and cost per answer | The two numbers that decide whether it scales | Langfuse traces |
+| Retrieval hit rate per section | Most wrong answers start as a retrieval miss; a weak section points at its documents | Eval harness on a weekly sample |
+| Refusal rate, and critic retries | Too high means strategists give up; too low means guardrails are leaking | `action` in `/ask` responses, Langfuse |
+| Faithfulness and section integrity | Catches claims that sound right but aren't in the sources, or sit in the wrong section | Claude judge, critic results in Langfuse |
+| Time to briefing and cost per briefing | The PRD's under-a-minute target, and whether it scales | Langfuse traces |
 
 ### Known limits and Release 2
 
-- <limit found during the build, e.g. "tables inside PDFs are retrieved as plain text">
-- <non-goal from the PRD that users will ask for>
-- Release 2: <the next slice, and the hypothesis it tests>
+- **Synthetic corpus:** 10 conditions, 30 documents; companies, drug codes and trial networks are fictional. Fine for proving the flow, not for a real decision.
+- **Only the sample conditions:** anything else gets "no sources for this condition", by design.
+- **Semantic search only:** keyword search is deferred until the eval hit rate asks for it.
+- **No live sources, no export:** no PubMed, trial registries or news feeds; no PDF or slides (PRD non-goals strategists will ask for).
+- **Not clinical decision support:** clinical and patient-specific questions are refused.
+- **Release 2:** real sources with the same labels and section check, plus a flag on any section whose as-of date is older than a threshold the team sets. Hypothesis: visible freshness lets strategists trust a briefing without re-checking every source.
 
 ### If two engineers picked this up next week
 
-- **Engineer 1:** retrieval and evals. Grow the golden set from real questions, then tune chunking and top-k against it.
-- **Engineer 2:** front end and feedback. Add a thumbs-up/down that writes back to Langfuse, so real usage feeds the golden set.
-- **Kept with the lead:** the guardrail and critic rules, because a mistake there is the most expensive kind.
+- **Engineer 1:** retrieval and evals. Grow the golden set from real strategist questions, then tune chunking, top-k and (if needed) keyword search against it.
+- **Engineer 2:** sources and feedback. Load the first real sources under the same labels, and add a thumbs-up/down that writes back to Langfuse so real usage feeds the golden set.
+- **Kept with the lead:** the guardrail and critic rules (scope, section integrity), because a mistake there is the most expensive kind.
