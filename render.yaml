@@ -21,3 +21,20 @@ services:
         sync: false
       - key: VOYAGE_API_KEY # query embeddings in the retriever; entered in the dashboard, never committed
         sync: false
+
+  - type: web
+    name: fderun-ui
+    runtime: docker
+    plan: free
+    region: virginia
+    branch: main
+    dockerfilePath: ./ui/Dockerfile
+    dockerContext: ./ui
+    healthCheckPath: /_stcore/health # Streamlit liveness; never calls the API
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - ui/**
+    envVars:
+      - key: API_URL # public API URL, not a secret
+        value: https://fderun-api.onrender.com

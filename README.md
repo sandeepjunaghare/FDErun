@@ -230,7 +230,7 @@ After that, every push to `main` that touches `api/` redeploys once CI is green.
 - `/health` never touches the database, so a Supabase blip can't block a deploy. `scripts/smoke.sh` checks the data path.
 - The container listens on Render's `$PORT` (8710 in docker compose) and runs as a non-root user.
 - Free instances sleep when idle. The first request after a pause can take 30–60 s (the smoke script waits up to 90 s), so warm the URL before a demo.
-- The Streamlit UI will be a second service in `render.yaml`, with `API_URL` pointing at this one.
+- The Streamlit UI is a second service, `fderun-ui` (`ui/Dockerfile`, health check `/_stcore/health`, redeploys only when `ui/**` changes), with `API_URL` set to the API's URL in `render.yaml`. Check it at <https://fderun-ui.onrender.com>: the sidebar shows ✅ for the API and database.
 
 ---
 

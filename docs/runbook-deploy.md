@@ -1,6 +1,6 @@
-# Runbook: deploy the API to Render
+# Runbook: deploy the API and UI to Render
 
-How `fderun-api` gets from this repo to a public URL, how to prove the right code is live, and what to do when it isn't. Every command runs from the repo root. Copy commands from the code blocks only.
+How `fderun-api` and `fderun-ui` get from this repo to a public URL, how to prove the right code is live, and what to do when it isn't. Every command runs from the repo root. Copy commands from the code blocks only.
 
 **Target:** clean slate to `SMOKE OK` in under 5 minutes; rehearsed at **1:29**. Render build plus deploy takes about 35 seconds; the rest is the dashboard.
 
@@ -12,7 +12,9 @@ How `fderun-api` gets from this repo to a public URL, how to prove the right cod
 git push → GitHub CI (lint, types, tests, Docker build) → Render auto-deploys after checks pass → /version shows the new commit
 ```
 
-- The service is defined in [`render.yaml`](../render.yaml) (a Render Blueprint): Docker, free plan, region `virginia` (next to Supabase us-east-1), health check `/health`, auto-deploy after CI passes, only when `api/**` changes.
+- Both services are defined in [`render.yaml`](../render.yaml) (a Render Blueprint): Docker, free plan, region `virginia` (next to Supabase us-east-1), auto-deploy after CI passes.
+  - `fderun-api`: health check `/health`, redeploys only when `api/**` changes.
+  - `fderun-ui` (Streamlit): health check `/_stcore/health`, redeploys only when `ui/**` changes. `API_URL` points at `https://fderun-api.onrender.com`, set in `render.yaml` (not a secret).
 - The only secret is `DATABASE_URL`, entered in the Render dashboard. It is never in git.
 - The database is Supabase, shared by local runs and Render. Migrations run from your machine.
 
@@ -48,8 +50,8 @@ Expect `## main...origin/main` with no `[ahead …]` or `[behind …]`.
 ### Teardown (rehearsals only, untimed)
 
 1. Render → Blueprints → the Blueprint → **Settings → Disconnect Blueprint**. This unlinks it; the service keeps running.
-2. Render → **fderun-api → Settings → Delete Web Service** → type the name to confirm.
-3. The dashboard shows no `fderun-api` and no Blueprint.
+2. Render → **fderun-api → Settings → Delete Web Service** → type the name to confirm. Same for **fderun-ui**.
+3. The dashboard shows no `fderun-api`, no `fderun-ui` and no Blueprint.
 
 ### Setup (untimed)
 
@@ -90,6 +92,14 @@ PASS  smoke      {"smoke":"ok","write":"ok","read":"ok","vector_search":"ok","di
 SMOKE OK
 ```
 
+**6. Check the UI** (after the timer; the Blueprint deploys it in parallel):
+
+```bash
+curl -fsS https://fderun-ui.onrender.com/_stcore/health && echo
+```
+
+Expect `ok`. Then open <https://fderun-ui.onrender.com>: the sidebar shows ✅ for `/health`, `/version` and `/health/db`, and the page says "Connected to the API and the database". A ❌ right after a wake-up usually means the API was still asleep (the UI waits only 10 s): refresh once.
+
 ---
 
 ## Everyday deploy
@@ -103,7 +113,9 @@ scripts/smoke.sh https://fderun-api.onrender.com latest --wait
 
 `latest` passes when the live commit has the same `api/` code as your `HEAD`; `--wait` keeps polling until it does (about 40 s after CI passes, roughly 80 s after the push), because the old deploy stays healthy while the new one builds. Without `--wait`, the same command fails with `different api/ code` until then.
 
-Changes outside `api/` (docs, scripts) do not redeploy, by design (`buildFilter` in `render.yaml`). The live commit is then older than `HEAD`, which `latest` accepts because the API code is identical. To require one exact commit instead, pass its SHA: `scripts/smoke.sh <url> 52c6029`.
+A push that touches `ui/` redeploys `fderun-ui` instead; check it with step 6 above (the smoke script covers only the API).
+
+Changes outside `api/` and `ui/` (docs, scripts) do not redeploy, by design (`buildFilter` in `render.yaml`). The live commit is then older than `HEAD`, which `latest` accepts because the API code is identical. To require one exact commit instead, pass its SHA: `scripts/smoke.sh <url> 52c6029`.
 
 ---
 
@@ -146,6 +158,6 @@ Changes outside `api/` (docs, scripts) do not redeploy, by design (`buildFilter`
 
 ## Notes
 
-- **Free plan:** the instance sleeps after inactivity. Open `/health` a minute before a demo.
+- **Free plan:** both instances sleep after inactivity. A minute before a demo, open the API's `/health` first, then the UI (the UI's first load calls the API with a 10 s timeout).
 - **`/health` never touches the database,** so a Supabase blip can't fail a deploy. `/health/db` and `POST /smoke` check the data path.
 - **`POST /smoke` leaves nothing behind:** it writes, reads and vector-searches a row in one transaction that is rolled back.

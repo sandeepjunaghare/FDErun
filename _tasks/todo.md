@@ -544,3 +544,42 @@ Done 2026-10-06. Docs + one docstring; no behaviour change.
   4 headings); the check printed only the last 3 lines of the output.
 - Follow-up (approved in chat): fixed all 11 — bare URLs wrapped in `<>`, `**Notes**` → `### Notes`, blank line
   after every `##` heading in CLAUDE.md. markdownlint on the 4 touched files: 0 issues.
+
+---
+
+# Task: deploy the UI to Render in preflight (approved in chat)
+
+Why: the UI on Render has never been run in a dry run. Streamlit needs websockets, `$PORT`, and `API_URL` set to
+the API's Render URL. Proving it now with the skeleton means the session only redeploys pane C's code.
+
+## Decisions (assumptions — confirm or change)
+
+- Second service `fderun-ui` in `render.yaml`, alongside the API: docker, free plan, virginia, `./ui`,
+  `buildFilter: ui/**`, `autoDeployTrigger: checksPass`.
+- Health check `/_stcore/health` (Streamlit's built-in liveness endpoint, no API call).
+- `API_URL=https://fderun-api.onrender.com` committed as a plain value (not a secret). No other env vars, so
+  the Blueprint sync needs no dashboard input.
+- The new service is created by Render's Blueprint sync on push. If the Blueprint isn't set to auto-sync, a
+  **Manual sync** in the dashboard (you) creates it.
+- No code changes in `ui/` (pane C owns it). Known limit: if the API is asleep, the UI's first load can show ❌
+  (10 s timeout vs 30–60 s wake-up). Fix = warm the API first, then refresh the UI. Documented, not coded.
+- `scripts/smoke.sh` stays API-only. The UI check is one curl on `/_stcore/health` + opening the page.
+- UI Docker build is not added to CI (CI already lints + type-checks `ui/`; Render builds the image).
+
+## Plan
+
+- [x] `render.yaml` — add the `fderun-ui` service
+- [x] `docs/runbook-deploy.md` — title/intro cover both services; a "UI check" step after `SMOKE OK`
+      (curl `/_stcore/health` → `ok`, open the page → "Connected to the API and the database"); teardown deletes
+      both services; free-plan note: warm the API before the UI
+- [x] `docs/runbook-kickoff.md` — §0 step 4 and §8 add the UI check
+- [x] `README.md` — replace "The Streamlit UI will be a second service" with the live setup
+- [ ] Commit + push (`feat: deploy Streamlit UI as second Render service — deployment`)
+
+## Verification
+
+- [ ] `render.yaml` parses (yaml load) and CI is green on the push
+- [ ] Render creates `fderun-ui` (Blueprint sync); `scripts/smoke.sh … latest --wait` still `SMOKE OK`
+- [ ] `curl https://fderun-ui.onrender.com/_stcore/health` → `ok`
+- [ ] Open the UI page in the browser: sidebar shows ✅ for `/health`, `/version`, `/health/db`
+- [ ] Then: CLAUDE.md rubric map, Deployment row → "api + ui verified on Render"

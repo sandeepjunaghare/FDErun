@@ -36,7 +36,8 @@ return another scenario's text. So the day runs on a new, empty project:
 1. Supabase → New project (region us-east-1, next to Render's virginia) → Database → Extensions → `vector`.
 2. Connect → Session pooler URL → `DATABASE_URL` in `.env` and in Render → fderun-api → Environment.
 3. `uv run --script scripts/check_db.py` → `cd api && uv run python -m db.migrate` (only `0001_smoke.sql`).
-4. `scripts/smoke.sh` locally, then `scripts/smoke.sh https://fderun-api.onrender.com latest --wait`.
+4. `scripts/smoke.sh` locally, then `scripts/smoke.sh https://fderun-api.onrender.com latest --wait`. Then open
+   <https://fderun-ui.onrender.com>: three ✅ in the sidebar (`docs/runbook-deploy.md` step 6).
 5. Render → Environment also has `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` (declared in `render.yaml`).
 
 ---
@@ -157,6 +158,9 @@ refuses. Works → step 8. Doesn't → fix on `main` and re-check; don't push a 
 git push
 scripts/smoke.sh https://fderun-api.onrender.com latest --wait
 ```
+
+Then open <https://fderun-ui.onrender.com> and run one in-scope question and one refusal in the deployed chat. If pane C's
+UI changes are merged, Render redeploys `fderun-ui` on the same push (about the same time as the API).
 
 Migrations already ran in step 7 (local and Render share one database). Full procedure:
 `docs/runbook-deploy.md`. Render failing or CI red with no time to fix: `docs/runbook-local.md`.
