@@ -85,7 +85,7 @@ own worktree via `/pane`, which owns disjoint folders; shared files (`api/main.p
 |---|---|---|
 | Deployment | `render.yaml`, `api/Dockerfile`, `ui/Dockerfile`, `scripts/smoke.sh`, `docs/runbook-deploy.md` | verified: api + ui on Render (`fderun-ui` shows API + DB ✅, 2026-10-07); push → CI → auto-deploy (~35 s) → smoke OK; clean-slate deploy rehearsed in 1:29; local fallback (api + ui) rehearsed: Docker ~50 s cold / 8 s warm, uv ~4 s (`docs/runbook-local.md`) |
 | GitHub | `README.md`, `.github/workflows/ci.yml` | verified: CI green on the last 20 pushes (lint, types, unit tests, evals harness, ui lint + types, gitleaks, Docker build); README has the Handoff section |
-| Vector DB | `api/db/`, `api/db/migrations/` | connection + smoke table built; documents/chunks table planned |
+| Vector DB | `api/db/`, `api/db/migrations/`, `api/rag/` (ingest) | connection + smoke table built; documents/chunks table planned; ingest planned (pane B: `python -m rag.ingest <corpus-dir>`, run once from local after migrate; documented in README Run step 4 + `docs/runbook-kickoff.md` step 7) |
 | Embedding model | `api/rag/`, `EMBEDDING_*` + `VOYAGE_API_KEY` in `.env` | chosen + verified: voyage-4, 1024 dims → `vector(1024)` (`scripts/check_embeddings.py`); rag/ client planned |
 | Multi-agent orchestration | `api/agents/` | planned |
 | Framework | `api/main.py` (FastAPI) | FastAPI built; Messages API + Voyage → pgvector verified: `/ask` dry run 2026-10-07, evals PASS (`docs/runbook-kickoff.md` → Dry-run lessons); agents planned |
