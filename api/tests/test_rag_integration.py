@@ -11,14 +11,7 @@ from rag import list_conditions
 from rag.ingest import ingest
 from rag.search import search
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.anyio,
-    pytest.mark.skipif(
-        not get_settings().voyage_api_key,
-        reason="VOYAGE_API_KEY not set (ingest embeds via Voyage)",
-    ),
-]
+pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
 CORPUS = Path(__file__).resolve().parents[2] / "corpus" / "condition-briefing"
 
@@ -32,6 +25,8 @@ async def count_chunks(conn: psycopg.AsyncConnection) -> int:
 
 async def test_ingest_is_idempotent_and_search_filters():
     settings = get_settings()
+    if not settings.voyage_api_key:
+        pytest.skip("VOYAGE_API_KEY not set (ingest embeds via Voyage)")
     async with await psycopg.AsyncConnection.connect(settings.database_url) as conn:
         first = await ingest(CORPUS, conn)
         after_first = await count_chunks(conn)
