@@ -11,7 +11,9 @@ from contract import AskResponse, RetrievedChunk
 class Target(Protocol):
     name: str
 
-    async def ask(self, question: str, user_id: str) -> AskResponse: ...
+    async def ask(
+        self, question: str, user_id: str, session_id: str | None = None
+    ) -> AskResponse: ...
 
 
 class HttpTarget:
@@ -22,8 +24,11 @@ class HttpTarget:
         # 90 s: a sleeping Render free instance takes 30–60 s to wake.
         self._client = httpx2.AsyncClient(base_url=self.name, timeout=timeout, transport=transport)
 
-    async def ask(self, question: str, user_id: str) -> AskResponse:
-        r = await self._client.post("/ask", json={"question": question, "user_id": user_id})
+    async def ask(self, question: str, user_id: str, session_id: str | None = None) -> AskResponse:
+        body = {"question": question, "user_id": user_id}
+        if session_id:
+            body["session_id"] = session_id
+        r = await self._client.post("/ask", json=body)
         r.raise_for_status()
         return AskResponse.model_validate(r.json())
 
@@ -66,7 +71,7 @@ class FakeTarget:
             for i, text in enumerate(texts)
         ]
 
-    async def ask(self, question: str, user_id: str) -> AskResponse:
+    async def ask(self, question: str, user_id: str, session_id: str | None = None) -> AskResponse:
         q = question.lower()
         if any(w in q for w in _OUT_OF_SCOPE):
             return AskResponse(

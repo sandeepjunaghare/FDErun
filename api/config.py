@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     # Set by Render on every deploy; "local" elsewhere. Served by GET /version.
     render_git_commit: str = "local"
 
+    # Empty defaults: health routes start without them; the pipeline fails with LLMError.
+    anthropic_api_key: str = ""
+    voyage_api_key: str = ""
+    embedding_model: str = "voyage-4"
+    embedding_dim: int = 1024
+    planner_model: str = "claude-haiku-4-5"
+    critic_model: str = "claude-haiku-4-5"
+    answerer_model: str = "claude-sonnet-5-5"
+    # Top-k per section (three searches per briefing).
+    retrieval_k: int = 5
+
     @field_validator("database_url")
     @classmethod
     def _database_url_is_a_real_url(cls, v: str) -> str:

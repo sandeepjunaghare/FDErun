@@ -21,7 +21,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from contract import GoldenSet, Thresholds
+from contract import GoldenCase, GoldenSet, Thresholds
 from golden import load_golden
 from judge import ClaudeJudge, Judge, JudgeError
 from langfuse_sink import LangfuseSink
@@ -64,15 +64,22 @@ async def evaluate(
     only: set[str] | None = None,
     concurrency: int = 5,
     sink: LangfuseSink | None = None,
+    run_id: str | None = None,
 ) -> list[CaseResult]:
     cases = [c for c in golden.cases if not only or c.id in only]
     sem = asyncio.Semaphore(concurrency)
+    run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    async def one(case) -> CaseResult:
+    async def one(case: GoldenCase) -> CaseResult:
         async with sem:
             res = CaseResult(case.id, case.question)
             try:
-                resp = await target.ask(case.question, case.user_id)
+                if case.session:
+                    # Per-run id, so a rerun never continues an earlier run's conversation.
+                    sid = f"eval-{run_id}-{case.session}"
+                    resp = await target.ask(case.question, case.user_id, session_id=sid)
+                else:
+                    resp = await target.ask(case.question, case.user_id)
             except Exception as e:  # noqa: BLE001 — any target failure is reported per case
                 res.error = f"{type(e).__name__}: {e}"[:200]
                 return res
@@ -115,7 +122,18 @@ async def evaluate(
                 )
             return res
 
-    return list(await asyncio.gather(*(one(c) for c in cases)))
+    # Cases sharing a session run in file order; everything else runs concurrently.
+    groups: dict[str, list[GoldenCase]] = {}
+    for c in cases:
+        groups.setdefault(c.session or f"\0{c.id}", []).append(c)
+
+    async def in_order(group: list[GoldenCase]) -> list[CaseResult]:
+        return [await one(c) for c in group]
+
+    by_id = {
+        r.id: r for rs in await asyncio.gather(*(in_order(g) for g in groups.values())) for r in rs
+    }
+    return [by_id[c.id] for c in cases]
 
 
 def _rate(values: list) -> float | None:
@@ -277,7 +295,7 @@ def main(argv: list[str] | None = None, judge: Judge | None = None) -> int:
 
     async def go() -> list[CaseResult]:
         try:
-            return await evaluate(golden, target, judge, k, only, args.concurrency, sink)
+            return await evaluate(golden, target, judge, k, only, args.concurrency, sink, run_id)
         finally:
             if isinstance(target, HttpTarget):
                 await target.aclose()

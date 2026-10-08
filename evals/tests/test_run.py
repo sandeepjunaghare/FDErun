@@ -1,12 +1,13 @@
 import asyncio
 import json
+from datetime import date
 from pathlib import Path
 
 import httpx2
 import pytest
 
 import run
-from contract import AskResponse, RetrievedChunk
+from contract import AskResponse, GoldenSet, RetrievedChunk
 from golden import load_golden
 from judge import Faithfulness, JudgeError
 from targets import FakeTarget, HttpTarget
@@ -100,7 +101,7 @@ def test_target_errors_fail_the_run(tmp_path, capsys):
     class Down:
         name = "down"
 
-        async def ask(self, question, user_id):
+        async def ask(self, question, user_id, session_id=None):
             raise ConnectionError("refused")
 
     golden = load_golden(EXAMPLE)
@@ -108,6 +109,71 @@ def test_target_errors_fail_the_run(tmp_path, capsys):
     summary = run.summarize(results, golden.thresholds, judged=False)
     assert summary["errors"] == 4
     assert summary["pass"] is False
+
+
+def test_session_cases_run_in_order_with_one_session_id():
+    calls: list[tuple[str, str | None]] = []
+
+    class Recorder:
+        name = "recorder"
+
+        async def ask(self, question, user_id, session_id=None):
+            await asyncio.sleep(0.01 if question == "first" else 0)
+            calls.append((question, session_id))
+            return AskResponse(answer="a", action="refuse")
+
+    golden = GoldenSet.model_validate(
+        {
+            "name": "s",
+            "cases": [
+                {"id": "a", "question": "first", "type": "out_of_scope", "session": "hf"},
+                {"id": "b", "question": "alone", "type": "out_of_scope"},
+                {"id": "c", "question": "second", "type": "out_of_scope", "session": "hf"},
+            ],
+        }
+    )
+    results = asyncio.run(run.evaluate(golden, Recorder(), None, k=5, run_id="r1"))
+    assert [r.id for r in results] == ["a", "b", "c"]
+    session_calls = [c for c in calls if c[1] is not None]
+    assert session_calls == [("first", "eval-r1-hf"), ("second", "eval-r1-hf")]
+    assert ("alone", None) in calls
+
+
+def test_http_target_sends_session_id_only_when_set():
+    bodies = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        bodies.append(json.loads(request.content))
+        return httpx2.Response(200, json={"answer": "a"})
+
+    async def go() -> None:
+        target = HttpTarget("http://api.test/", transport=httpx2.MockTransport(handler))
+        try:
+            await target.ask("q?", "u1", session_id="s1")
+            await target.ask("q?", "u1")
+        finally:
+            await target.aclose()
+
+    asyncio.run(go())
+    assert bodies == [
+        {"question": "q?", "user_id": "u1", "session_id": "s1"},
+        {"question": "q?", "user_id": "u1"},
+    ]
+
+
+def test_retrieved_chunk_accepts_labels():
+    chunk = RetrievedChunk.model_validate(
+        {
+            "chunk_id": "heart-failure-standard_of_care-0",
+            "doc": "heart-failure/standard_of_care.md",
+            "text": "t",
+            "section": "standard_of_care",
+            "source_label": "Synthetic guideline summary",
+            "as_of": "2026-05-20",
+        }
+    )
+    assert chunk.as_of == date(2026, 5, 20)
+    assert RetrievedChunk(chunk_id="c", doc="d", text="t").section is None
 
 
 def test_http_target_posts_to_ask_and_validates_the_contract():
