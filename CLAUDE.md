@@ -19,14 +19,16 @@ same `AskResponse`; the contract lives in `evals/README.md`.
 api/                      # FastAPI service — Render web service; streams responses over SSE
   main.py                 # app + lifespan (DB pool) + routes: GET /health (liveness, Render's check),
                           #   GET /version (deployed git commit), GET /health/db (Supabase + pgvector),
-                          #   POST /smoke (write/read/vector roundtrip, rolled back); planned: POST /ask (JSON) and
-                          #   POST /chat (SSE), both thin wrappers over agents/pipeline.py
+                          #   POST /smoke (write/read/vector roundtrip, rolled back), POST /ask (JSON), POST /chat (SSE:
+                          #   status → token → done | error), GET /recent?user_id= — thin wrappers over agents/
   agents/                 # Anthropic Messages API pipeline — one job per agent, no shared side effects
-    planner.py            # router: in-scope → retrieve; out-of-scope → refuse
-    retriever.py          # embed query → pgVector top-k from Supabase
-    answerer.py           # draft answer that cites retrieved chunks
-    critic.py             # guardrail gate before anything reaches the user — review this hardest
-    pipeline.py           # wires the 4 agents and emits SSE events
+    llm.py                # shared structured-output helper (beta.messages.parse); LLMError / LLMRefusal
+    planner.py            # haiku: briefing | follow_up | out_of_scope, resolves condition id → refuse early
+    retriever.py          # plain function: 3 × rag.search, one per section, filtered to the condition
+    answerer.py           # sonnet: typed BriefingDraft (claims + chunk ids); render.py turns it into markdown
+    critic.py             # code checks (citations, section integrity) then haiku faithfulness — review hardest
+    pipeline.py           # wires the stages as an event generator; one retry, then refuse
+    deps.py               # app wiring; STUBS rag.search / rag.conditions (reads corpus/) until pane B merges
   schemas/                # Pydantic I/O contracts for every agent — guardrails are enforced here, not in prompts
   guardrails/             # scope classifier, PII redaction, citation check, the one domain rule
   memory/                 # session memory (conversation) + persistent memory (user profile), scoped per user
@@ -91,10 +93,10 @@ own worktree via `/pane`, which owns disjoint folders; shared files (`api/main.p
 | GitHub | `README.md`, `.github/workflows/ci.yml` | verified: CI green on the last 20 pushes (lint, types, unit tests, evals harness, ui lint + types, gitleaks, Docker build); README has the Handoff section |
 | Vector DB | `api/db/`, `api/db/migrations/`, `api/rag/` (ingest) | connection + smoke table built; documents/chunks table planned; ingest planned (pane B: `python -m rag.ingest <corpus-dir>`, run once from local after migrate; documented in README Run step 4 + `docs/runbook-kickoff.md` step 7) |
 | Embedding model | `api/rag/`, `EMBEDDING_*` + `VOYAGE_API_KEY` in `.env` | chosen + verified: voyage-4, 1024 dims → `vector(1024)` (`scripts/check_embeddings.py`); rag/ client planned |
-| Multi-agent orchestration | `api/agents/` | planned |
-| Framework | `api/main.py` (FastAPI) | FastAPI built; Messages API + Voyage → pgvector verified: `/ask` dry run 2026-10-07, evals PASS (`docs/runbook-kickoff.md` → Dry-run lessons); agents planned |
-| Memory | `api/memory/` | planned |
-| Guardrails | `api/schemas/`, `api/guardrails/` | planned |
+| Multi-agent orchestration | `api/agents/` | built + unit-tested: planner → retriever → answerer → critic, one retry then refuse; retrieval stubbed until pane B merges |
+| Framework | `api/main.py` (FastAPI) | FastAPI built; Messages API + Voyage → pgvector verified: `/ask` dry run 2026-10-07, evals PASS (`docs/runbook-kickoff.md` → Dry-run lessons); `/ask` + `/chat` (SSE) + `/recent` built and unit-tested |
+| Memory | `api/memory/` | built + unit-tested: session turns (follow-ups reuse the briefing's chunks) + recent conditions per user; Postgres store verified against Supabase (`pytest -m integration`) |
+| Guardrails | `api/schemas/`, `api/guardrails/` | built + unit-tested: scope (planner + code), PII redaction on input, citations ⊆ retrieved, section integrity |
 | LLM Eval | `evals/` | verified: harness tested (fake target); real Claude judge (claude-haiku-4-5) passes the example set (`evals/results/20261006-162139-example.json`) and flags an unsupported claim (`pytest -m integration`), Langfuse traces on; per-scenario golden set + `/ask` on the day |
 | Front end | `ui/` | skeleton verified: Streamlit shows API + DB status, runs in Docker, with uv (`docs/runbook-local.md`) and on Render (https://fderun-ui.onrender.com); chat view planned |
 
