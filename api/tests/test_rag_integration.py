@@ -11,7 +11,14 @@ from rag import list_conditions
 from rag.ingest import ingest
 from rag.search import search
 
-pytestmark = [pytest.mark.integration, pytest.mark.anyio]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.anyio,
+    pytest.mark.skipif(
+        not get_settings().voyage_api_key,
+        reason="VOYAGE_API_KEY not set (ingest embeds via Voyage)",
+    ),
+]
 
 CORPUS = Path(__file__).resolve().parents[2] / "corpus" / "condition-briefing"
 

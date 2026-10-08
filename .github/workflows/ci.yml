@@ -105,6 +105,8 @@ jobs:
     env:
       # Empty when the repo secret isn't set, and always empty for PRs from forks.
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Ingest + search round trip; that test skips itself when the secret isn't set.
+      VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
     steps:
       - name: Skip without DATABASE_URL secret
         if: env.DATABASE_URL == ''
