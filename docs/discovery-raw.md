@@ -1,0 +1,30 @@
+# Discovery raw — <scenario>
+
+Type here during the call, in any order, half-sentences fine. Then run `/discovery` to sort it into
+`docs/discovery-notes.md` (run it mid-call too, to see which sections are still empty).
+
+Tags (optional, start of line): `?` open question · `A:` assumption · `"` verbatim quote (→ Evidence)
+
+Cheat sheet, pick 5–6: who is the user, what do they do today · cost of wrong/slow today · evidence it's real ·
+why now · RIGHT if / WRONG if · trigger, and who it's NOT for · smallest end-to-end flow, Release 2 ·
+one success metric + target · out of scope · data (format, volume, owner, synthetic OK?) · cost of a wrong
+answer · PII/regulatory · internal or client-facing, latency · what makes them trust it · existing systems
+
+---
+
+Brief:
+Healthcare: A health system strategy team wants a tool that generates a structured briefing for
+a given medical condition, covering the current standard of care, emerging treatments in
+development, and key companies/institutions involved.
+
+Notes:
+
+You can see it's a strategy team. That's it. A strategy team here wants to build the tool. I'm quickly moving on to the data. We will ask to create some synthetic data for this particular project. Will that work? As I said, it's up to the data, but to prove the medical. This is a healthcare scenario, right? Correct. It would be good because, based on the scenario, you explain the end user, right? What do you think about the output and everything? We can talk about the data after that. This tool is for a strategy tool. In general, this will be an interface where the strategist will come in and ask the tool about the medical condition, given conditions, and the standard of care. The response will come back. The input will be a medical condition, and what should the user see in the briefing? After it enters the medical condition, it will clearly see the treatment and development. It will also see the involvement around the treatment. It will give a very clear format of what the medical condition is and what the development plan is. Basically, it will give the briefing about the condition and the three sections mentioned in the scenario:
+
+- What is the current standard of care?
+- What are the emerging treatments for that condition?
+- What are the key institutions involved? This is our product flow. If you go with synthetic documents, as you can see, there are current standard of care and emerging treatments. For those things, we have to be careful about freshness and source credibility. If you go for synthetic documents, I think it will be contradicting what we have to show. Dinesh, in this case, I will push back a little bit and say that, because we are working on an MVP, we want to make sure that we have data in-house and we are working on a sample golden dataset. I will keep it to a level where we are generating some sample data and then making sure that the tool works first. That will be good because we don't want to add everything in the beginning, and if we cross the time and don't get any working slice, that will be a no. That's a good plan. Yeah, you can start. Okay, before I start asking you any more questions, I can give you a brief overview of how I'm going to run this. Will that work? Can I share my screen? Yeah, okay.
+- One user who is a strategist. Are there any regulatory constraints here that we have to look at, Dinesh? To be frank, Sandeep, I think we are only talking about it from my side. I can only give the scenario and the assumptions and everything. You can make that up. Previously, as we discussed, my only concern is the amount of orchestration around the discovery, technical spec tickets, and multiple agents for our prototype. Before we start that, what parts of that setup kit are you actually going to use? Okay, I can run you through that.
+- Treatments and key institutions, rather than just sending everything to the LLM. Correct. What I'm doing is I'm using a PG vector-embedded model inside Supabase itself. In that case, what happens is that we will create a set of already existing medical conditions, and for anything that requires semantic search or semantic reasoning, we will use the embedded model within Supabase.
+- Vector choice: a little, because for a small controlled MVP corpus, why use PG vector at all instead of just simpler structured lookup or full-text search? I could use a keyword search, absolutely, I could. In this case, what I would do is give a hybrid on a keyword search as well as on a semantic embedded model search. Also, semantic and hybrid, we can go and build, and since Supabase provides you with both the capabilities, I chose that as a simpler option.
+- I'm just asking about your reasoning for choosing that tech stack and what trade-offs you're making. You don't need to make any changes based on what I said. I'm not trying to steer you toward a particular implementation. As I said, I just want to understand the trade-off. Using Supabase for both keyword retrieval and PG vector is a reasonable way to keep the stack consolidated. You can go ahead with that approach. As you implement, just talk me through how we are structuring the source records and metadata, because that will determine whether the hybrid retrieval is useful later. One more thing: if you do keep PG vector, how are you going to tag or chunk the content so the system can distinguish standard of care from emerging treatments and key institutions, rather than just retrieving semantically similar but mixed evidence? That is true. Again, we'll go with very simple, very, very simple assumptions here right now. The whole point here is that, in our chunks, we get enough information that comes out as one unit, so the chunk sizes are enough. We'll keep very, very, very simple assumptions around. If we go the semantic route, here are the simple chunks based on the document dataset that we prepare. In terms of keyword search, whatever our data model that we want to build, we will apply those for the keyword search separately from the data model. I'm keeping the options open right now. Okay, got it. That's fine.

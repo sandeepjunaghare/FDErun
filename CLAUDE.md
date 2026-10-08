@@ -45,13 +45,17 @@ evals/                    # own uv project (pane B). Black-box eval of POST /ask
                           #   faithfulness (Claude judge) → terminal, results/, optional Langfuse. evals/README.md
   contract.py             # the /ask response shape pane A must implement, and the golden-set models
   golden/<scenario>.yaml  # 10–15 cases per scenario; example.yaml runs against the built-in fake pipeline
+corpus/condition-briefing/ # synthetic corpus: 10 conditions × 3 sections, YAML labels (section, source_label, as_of);
+                          #   data card = its README.md; validate: uv run --script scripts/check_corpus.py corpus/condition-briefing
 scripts/
   check_db.py             # standalone Supabase + pgvector check: uv run --script scripts/check_db.py
   smoke.sh                # deploy smoke test for any URL: scripts/smoke.sh [base_url] [latest|sha] [--wait]
   copy-db-url.sh          # copies DATABASE_URL from .env for a dashboard, password masked in output
+  check_corpus.py         # corpus labels check (all 3 sections per condition, Synthetic label, ISO as_of)
   check_embeddings.py     # Voyage embedding check (dim = EMBEDDING_DIM, ranking): uv run --script scripts/check_embeddings.py
 docs/runbook-deploy.md    # deploy procedure, troubleshooting, rollback, password rotation
 docs/runbook-local.md     # fallback: run + demo api and ui locally (Docker or plain uv) when Render/CI is blocked
+docs/walkthrough-data.md  # stakeholder walkthrough of the synthetic data: source labels, as-of dates
 docs/runbook-kickoff.md   # brief → PRD → architecture → tickets → 4 worktree panes, minute by minute
 docs/templates/           # discovery-raw.md: freeform capture during the call → /discovery sorts it into
                           #   discovery-notes.md (stakeholder questions mapped to PRD sections)

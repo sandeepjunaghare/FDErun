@@ -594,3 +594,56 @@ the API's Render URL. Proving it now with the skeleton means the session only re
   the checks run in Streamlit's backend (curl can't see them) and headless Chrome screenshots came back blank.
 - Improve: a scriptable UI check (e.g. a real-browser screenshot step) so this doesn't need a human.
 - Note: Streamlit now runs on uvicorn (`x-render-origin-server: uvicorn`), so that header doesn't identify the service.
+
+---
+
+# Task: Synthetic corpus for condition briefings (2026-10-08)
+
+Goal: a synthetic corpus the stakeholder accepts despite their freshness and source-credibility concern. Every
+document carries a visible source label and as-of date, and the walkthrough shows both on screen.
+Intent: `docs/condition-briefing.prd.md` · how: `docs/architecture.md`.
+
+## Decisions (assumptions — confirm or change)
+
+- Location: `corpus/condition-briefing/<condition-slug>/<section>.md`, top-level data folder, read by
+  `python -m rag.ingest corpus/condition-briefing` (pane B's ingest).
+- 10 conditions × 3 sections = 30 documents. Sections: `standard_of_care`, `emerging_treatments`,
+  `key_institutions`; one document per condition and section, so each one's label is unambiguous.
+- Each document has YAML front matter: `condition`, `aliases`, `section`, `title`, `source_label`, `source_type`,
+  `as_of` (ISO date), `synthetic: true`. Body is ~150–250 words (5 paragraphs or fewer) in self-contained paragraphs, so any one chunk
+  still makes sense on its own.
+- Source labels are honest: they say "Synthetic", name the kind of source modeled (e.g. "guideline summary",
+  "pipeline digest"), and never cite a real journal, guideline body, or paper as if it were the source.
+- As-of dates vary between documents (2025–2026) so the briefing shows freshness per section, not one global date.
+- Real vs fictional entities: hybrid (question left unanswered; recommended default taken). Standard of care real
+  at a general level; companies, drug codes, and trial networks fictional and tagged "(fictional)".
+
+## Plan
+
+- [x] `corpus/condition-briefing/README.md` — data card: what it is, how it was made, what's real vs fictional,
+      label and as-of rules, "not clinical advice", how to regenerate
+- [x] 30 documents under `corpus/condition-briefing/<condition>/`
+- [x] `scripts/check_corpus.py` — standalone uv script: every condition has all 3 sections, required front-matter
+      fields present, `as_of` is a valid date, `synthetic: true`, no duplicate aliases across conditions
+- [x] `docs/walkthrough-data.md` — the stakeholder walkthrough: what to open, what to point at (source label and
+      as-of on a cited claim, the data card), and answers to "is it fresh?" / "can I trust the source?"
+- [x] CLAUDE.md map: add `corpus/` and `scripts/check_corpus.py`; architecture.md: link the data card
+
+## Verification
+
+- [x] `uv run --script scripts/check_corpus.py corpus/condition-briefing` passes
+- [x] Spot-read 3 documents (one per section): each paragraph reads on its own; labels say Synthetic
+- [ ] (pane B, later) ingest loads 30 documents and keeps condition, section, source label and as-of on every chunk
+
+## Review
+
+Done 2026-10-08. 30 documents + data card + validator (OK: 30 documents, 0 problems; ruff clean) + walkthrough.
+- Worked: one file per condition × section makes the section label unambiguous; the validator enforces the
+  "Synthetic" label and ISO as-of on every file.
+- Changed from plan: documents are shorter (~150–250 words) than the 300–500 planned, so each paragraph is one
+  self-contained claim. Lengthen later if retrieval needs more context.
+- Surfaced: the UI can't show source label/as-of per claim with today's `RetrievedChunk`. architecture.md now adds
+  three optional fields (section, source_label, as_of); `evals/` is pane B's folder, pane A implements it in /ask.
+- Not done: no golden set yet (`evals/golden/condition-briefing.yaml`); belongs to pane B's ticket.
+- Stray: Claude Code created an empty `corpus/condition-briefing/.claude/.cc-writes/` while working there; the
+  validator skips dot-folders. Left in place (not deleting without asking).
